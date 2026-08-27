@@ -1,0 +1,8 @@
+.agents/
+.cache/
+.vscode/
+.vs/
+bin/
+build/
+dumped/
+release/
