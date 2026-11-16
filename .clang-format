@@ -1,3 +1,5 @@
+## Clang 23
+
 BasedOnStyle: WebKit
 
 AccessModifierOffset: -2
