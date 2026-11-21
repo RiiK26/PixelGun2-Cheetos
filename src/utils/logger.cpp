@@ -24,10 +24,63 @@
 
 namespace Logger
 {
-  static std::mutex g_logMutex;
-  static FILE*      g_logFile = nullptr;
+  static std::mutex  g_logMutex;
+  static FILE*       g_logFile   = nullptr;
+  static PVOID       g_vehHandle = nullptr;
 
-  void              Init(HMODULE hModule)
+  static LONG WINAPI CrashVectoredHandler(EXCEPTION_POINTERS* ep)
+  {
+    if (!ep || !ep->ExceptionRecord || !ep->ContextRecord) {
+      return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    const DWORD code = ep->ExceptionRecord->ExceptionCode;
+    // Ignore benign / non-fatal exceptions (C++ EH, MSVC thread naming, breakpoints, RPC)
+    if (
+      code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION
+      && code != EXCEPTION_INT_DIVIDE_BY_ZERO && code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_PRIV_INSTRUCTION
+      && code != EXCEPTION_ARRAY_BOUNDS_EXCEEDED
+    ) {
+      return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    void*     addr              = ep->ExceptionRecord->ExceptionAddress;
+    HMODULE   mod               = nullptr;
+    char      modName[MAX_PATH] = "unknown";
+    uintptr_t rva               = 0;
+    if (
+      GetModuleHandleExA(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        static_cast<LPCSTR>(addr), &mod
+      )
+      && mod
+    ) {
+      GetModuleFileNameA(mod, modName, MAX_PATH);
+      rva = reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(mod);
+    }
+
+    const auto* ctx = ep->ContextRecord;
+    char        buf[1024];
+    std::snprintf(
+      buf, sizeof(buf),
+      "[CRASH] Exception 0x%08lX at %p (%s + 0x%llX) | RIP=%llX RSP=%llX RAX=%llX RCX=%llX RDX=%llX R8=%llX R9=%llX\n",
+      static_cast<unsigned long>(code), addr, modName, static_cast<unsigned long long>(rva),
+      static_cast<unsigned long long>(ctx->Rip), static_cast<unsigned long long>(ctx->Rsp),
+      static_cast<unsigned long long>(ctx->Rax), static_cast<unsigned long long>(ctx->Rcx),
+      static_cast<unsigned long long>(ctx->Rdx), static_cast<unsigned long long>(ctx->R8),
+      static_cast<unsigned long long>(ctx->R9)
+    );
+
+    OutputDebugStringA(buf);
+    if (g_logFile) {
+      std::fputs(buf, g_logFile);
+      std::fflush(g_logFile);
+    }
+
+    return EXCEPTION_CONTINUE_SEARCH;
+  }
+
+  void Init(HMODULE hModule)
   {
     std::lock_guard<std::mutex> lock(g_logMutex);
     if (g_logFile)
@@ -48,6 +101,9 @@ namespace Logger
     }
 
     g_logFile = std::fopen(logPath.c_str(), "w");
+    if (!g_vehHandle) {
+      g_vehHandle = AddVectoredExceptionHandler(1, CrashVectoredHandler);
+    }
   }
 
   void Log(const char* fmt, ...)
@@ -76,6 +132,10 @@ namespace Logger
   void Shutdown()
   {
     std::lock_guard<std::mutex> lock(g_logMutex);
+    if (g_vehHandle) {
+      RemoveVectoredExceptionHandler(g_vehHandle);
+      g_vehHandle = nullptr;
+    }
     if (g_logFile) {
       std::fclose(g_logFile);
       g_logFile = nullptr;

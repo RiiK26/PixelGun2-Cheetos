@@ -14,6 +14,7 @@
  */
 
 #include "renderer.h"
+#include "../features/visual/visual.hpp"
 #include "../ui/menu.h"
 #include "../utils/config.h"
 #include "../utils/logger.h"
@@ -75,6 +76,7 @@ static DWORD WINAPI MainThread(LPVOID lpParam)
   }
 
   SettingsRegistry::Clear();
+  Visual::RegisterSettings();
   auto& configGroup = SettingsRegistry::AddGroup("config", "-- CONFIG --", true);
   configGroup.AddAction("Save Config", Config::Save);
   configGroup.AddAction("Load Config", Config::Load);
@@ -90,6 +92,10 @@ static DWORD WINAPI MainThread(LPVOID lpParam)
     return 1;
   }
 
+  if (Visual::Init()) {
+    RendererHook::SetOverlayCallback(Visual::RenderOverlay);
+  }
+
   MH_EnableHook(MH_ALL_HOOKS);
   Logger::Log("[MAIN] initialized. Press END to unload.");
 
@@ -101,7 +107,8 @@ static DWORD WINAPI MainThread(LPVOID lpParam)
   }
 
   Logger::Log("[MAIN] Unloading...");
-  Config::Save();
+  RendererHook::SetOverlayCallback(nullptr);
+  Visual::Shutdown();
   RendererHook::Shutdown();
   Menu::Shutdown();
   MH_DisableHook(MH_ALL_HOOKS);
