@@ -1,0 +1,14 @@
+{
+	"project": "PG2-Cheetos",
+	"cheetos-version": "v0.0.1",
+	"steam-build-id": "",
+	"assembly_sha256": "",
+	"signatures_summary": {
+		"total": "",
+		"ok": "",
+		"broken": "",
+		"used": "",
+		"dormant": ""
+	},
+	"signatures": {}
+}
