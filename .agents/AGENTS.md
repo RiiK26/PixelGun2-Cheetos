@@ -30,11 +30,11 @@ Only `Release` and `Debug` build types are supported:
   ```
 - **Debug (`ENABLE_DEBUG_LOG` enabled):**
   ```bash
-  cmake -B build-debug -G Ninja -DCMAKE_SYSTEM_NAME=Windows \
+  cmake -B build -G Ninja -DCMAKE_SYSTEM_NAME=Windows \
     -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
     -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
     -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
-    -DCMAKE_BUILD_TYPE=Debug && cmake --build build-debug
+    -DCMAKE_BUILD_TYPE=Debug && cmake --build build
   ```
 
 ## Architecture & File Responsibilities
@@ -50,8 +50,12 @@ Keep each layer focused and dependencies one-way (`features` -> `utils`/`ui`/`da
   - `settings_registry.h` / `settings_registry.cpp`: Centralized `SettingsRegistry` (`AddGroup`, `AddBool`, `AddFloat`, `AddInt`, `AddAction`, `Clear`, `GetGroups`) driving both `Menu` population and `Config` persistence.
   - `config.h` / `config.cpp`: Thread-safe INI persistence (`Config::SetConfigPath`, `Config::Save`, `Config::Load`) reading/writing `featureconfig.txt` next to the DLL.
   - `aob.h` / `aob.cpp`, `il2cpp.h` / `il2cpp.cpp`, `resolver.h` / `resolver.cpp`: Pattern scanning, IL2CPP helpers, and runtime resolution utilities.
+  - `offsets.h`: Centralized registry for all IL2CPP `fields`, `offsets`, `RVA`, and `signatures` (never hardcode raw RVAs/offsets/signatures in feature `.cpp` files; always reference `offsets.h`).
 - `src/data/` — Game data definitions & 1:1 enums (`ability_card.hpp`, `character.hpp`, `chest.hpp`, `currency.hpp`, `loadout.hpp`, `skin.hpp`).
 - `src/features/` — Category-separated feature modules (`anticheat/`, `currency/`, `player/`, `visual/`, `weapon/`).
+  - **1:1 feature `.cpp` + 1 category `.hpp` orchestrator:** Each individual feature lives in its own `.cpp` file (e.g., `visual/body_esp.cpp`, `visual/box_esp.cpp`, `visual/name_esp.cpp`, with shared hooks/caches in `*_shared.cpp`), and each feature category folder has a single `.hpp` orchestrator header (e.g., `visual/visual.hpp`) that exposes the category lifecycle and coordinates its features.
+  - **Single-responsibility toggles:** Never add redundant master toggles; each feature toggle controls its own behavior independently.
+  - **Config load/save:** Auto-load `featureconfig.txt` on attach so saved settings override defaults; never auto-save on unload (`Save Config` is explicit only).
 - `src/injector/` — Standalone injector (`mainInjector.cpp`), excluded from the DLL target.
 - `src/vendor/` — Third-party dependencies (`ImGui/`, `minhook/`).
 
