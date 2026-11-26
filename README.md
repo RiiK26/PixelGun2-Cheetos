@@ -16,9 +16,9 @@
 
 | Category | Feature | Description |
 | :--- | :--- | :--- |
-| **Visual** | **ESP Body** | X-Ray player highlight through walls (`ApplyVisualEffect`) |
-| **Visual** | **ESP Box** | 2D bounding boxes projected via the active gameplay camera |
-| **Visual** | **ESP Name** | Live player nametags via `MatchPresentation` / `PlayerStanding` |
+| **Visual** | **ESP Body** | X-Ray player highlight through walls|
+| **Visual** | **ESP Box** | 2D bounding boxes projected|
+| **Visual** | **ESP Name** | Live player nametags|
 | **Visual** | **Team Check** | Filters teammates out of ESP rendering |
 
 ### Controls
