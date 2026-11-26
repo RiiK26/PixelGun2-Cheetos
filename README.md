@@ -95,4 +95,4 @@ If you find this project valuable and wish to support its ongoing development an
 
 ## License
 
-This project licensed under [**Apache License 2.0**](LICENSE)
+This project licensed under [**Apache License 2.0**](license)
