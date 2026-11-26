@@ -104,6 +104,20 @@ TRACKED_METHODS: Dict[str, Tuple[str, str, str, int, Optional[str]]] = {
         0,
         None,
     ),
+    "kHealthComponent_GetState": (
+        "Psa.Core.Modules.Health.Components.Implementation",
+        "HealthComponent",
+        "get_State",
+        0,
+        None,
+    ),
+    "kHealthState_GetPercentage": (
+        "",
+        "HealthComponent.HealthState",
+        "get_Percentage",
+        0,
+        None,
+    ),
     "kCamera_GetMain": ("UnityEngine", "Camera", "get_main", 0, None),
     "kCamera_GetAllCameras": ("UnityEngine", "Camera", "get_allCameras", 0, None),
     "kCamera_GetOrthographic": ("UnityEngine", "Camera", "get_orthographic", 0, None),
@@ -131,6 +145,11 @@ TRACKED_FIELDS: Dict[str, Tuple[str, str, str]] = {
         "PlayerVisuals",
         "_match",
     ),
+    "kPlayerVisuals_HealthComponent": (
+        "Psa.Core.Modules.Player.Components.Implementation",
+        "PlayerVisuals",
+        "_healthComponent",
+    ),
     "kPlayerVisuals_CurrentHitboxSet": (
         "Psa.Core.Modules.Player.Components.Implementation",
         "PlayerVisuals",
@@ -156,6 +175,16 @@ TRACKED_FIELDS: Dict[str, Tuple[str, str, str]] = {
         "ParticipantProfile",
         "<Name>k__BackingField",
     ),
+    "kHealthState_Health": (
+        "",
+        "HealthComponent.HealthState",
+        "Health",
+    ),
+    "kHealthState_MaxHealth": (
+        "",
+        "HealthComponent.HealthState",
+        "_maxHealth",
+    ),
 }
 
 # (source_rel_path, cpp_enum_name, dump_namespace, dump_enum_name)
@@ -171,17 +200,5 @@ TRACKED_ENUMS: List[Tuple[str, str, str, str]] = [
         "TeamRelation",
         "Psa.Core.Modules.RoundFlow.GameModes",
         "TeamRelation",
-    ),
-    (
-        "src/data/currency.hpp",
-        "CurrencyEnum",
-        "Psa.Meta.Features.Currencies",
-        "CurrencyEnum",
-    ),
-    (
-        "src/data/currency.hpp",
-        "ResourceEnum",
-        "Psa.Meta.Modules.ResourceItems",
-        "ResourceEnum",
     ),
 ]
