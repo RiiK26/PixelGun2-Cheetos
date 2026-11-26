@@ -353,7 +353,7 @@ namespace Menu
   #define PROJECT_VERSION "dev"
 #endif
 
-    static const std::string titleStr = std::string("Pixel Gun 2 Cheat ") + PROJECT_VERSION;
+    static const std::string titleStr = std::string("Pixel Gun 2 Cheat v") + PROJECT_VERSION;
 
     float                    width    = 250.0f;
     float                    titleW   = ImGui::CalcTextSize(titleStr.c_str()).x + padding * 2;
