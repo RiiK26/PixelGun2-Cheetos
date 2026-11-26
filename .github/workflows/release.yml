@@ -1,46 +1,30 @@
-name: "Release"
+name: Release
 
 on:
   push:
     tags:
-      - "v*"
-
+      - 'v*'
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag (leave empty to use v<version> from config.json)"
+      tag_name:
+        description: 'Release tag name (e.g. v1.0.0, leave empty to auto-detect)'
         required: false
-        type: string
-        default: ""
-      prerelease:
-        description: "Mark as pre-release"
-        required: false
-        type: boolean
-        default: false
-      draft:
-        description: "Create as draft release"
-        required: false
-        type: boolean
-        default: false
+        default: ''
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+permissions:
+  contents: write
 
 jobs:
-  build-and-release:
-    name: Build & Publish Release
+  release:
+    name: Build and Publish Release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          fetch-depth: 0
 
-      - name: Read project metadata from config.json
+      - name: Read Project Metadata
         id: meta
         run: |
           python3 - << 'EOF'
@@ -48,114 +32,229 @@ jobs:
 
           cfg = json.load(open("config.json", encoding="utf-8"))
           project = cfg.get("project", "PG2-Cheetos")
-          version = cfg.get("version", "0.0.0").lstrip("vV")
+          game_version = cfg.get("version", "unknown").lstrip("vV")
           build_id = cfg.get("steam-build-id", "unknown")
-
-          ref_name = os.environ.get("GITHUB_REF_NAME", "")
-          ref_type = os.environ.get("GITHUB_REF_TYPE", "")
-          input_tag = os.environ.get("INPUT_TAG", "").strip()
-
-          if ref_type == "tag" and ref_name:
-              tag = ref_name
-          elif input_tag:
-              tag = input_tag if input_tag.startswith("v") else f"v{input_tag}"
-          else:
-              tag = f"v{version}"
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write(f"project={project}\n")
-              out.write(f"version={version}\n")
+              out.write(f"game_version={game_version}\n")
               out.write(f"build_id={build_id}\n")
-              out.write(f"tag={tag}\n")
           EOF
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
 
-      - name: Install build dependencies
+      - name: Install MinGW Build Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64 ninja-build zip
+          # Redirect flaky security mirrors to runner-local Azure mirrors
+          sudo sed -i 's|security.ubuntu.com|azure.archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
 
-      - name: Build Release (DLL + Injector)
+          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15"
+
+          for i in 1 2 3; do
+            sudo apt-get $APT_OPTS update -y && break || sleep 3
+          done
+
+          PKGS="g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 mingw-w64-x86-64-dev ninja-build zip"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get $APT_OPTS install -y --no-install-recommends $PKGS || {
+            echo "[!] First attempt failed, retrying with --fix-missing..."
+            sudo apt-get $APT_OPTS update -y
+            sudo DEBIAN_FRONTEND=noninteractive apt-get $APT_OPTS install -y --fix-missing $PKGS
+          }
+
+      - name: Configure CMake
         run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=resources/cmake/mingw-toolchain.cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_INJECTOR=ON
+          cmake -B build -G Ninja \
+                -DCMAKE_TOOLCHAIN_FILE=resources/cmake/mingw-toolchain.cmake \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_INJECTOR=ON
+
+      - name: Compile Binaries
+        run: |
           cmake --build build -j"$(nproc)"
 
-      - name: Package release assets & checksums
+      - name: Validate Binary Artifacts
         run: |
           PROJ="${{ steps.meta.outputs.project }}"
-          TAG="${{ steps.meta.outputs.tag }}"
+          echo "Verifying build outputs..."
+          if [ ! -f "build/bin/${PROJ}.dll" ] || [ ! -f "build/bin/${PROJ}_Injector.exe" ]; then
+            echo "::error::Required binaries not found in build/bin/!"
+            ls -la build/bin/ || true
+            exit 1
+          fi
+          ls -lh "build/bin/${PROJ}.dll" "build/bin/${PROJ}_Injector.exe"
 
-          mkdir -p dist/pkg
-          cp "build/bin/${PROJ}.dll" dist/pkg/
-          cp "build/bin/${PROJ}_Injector.exe" dist/pkg/
-          cp resources/scripts/run.sh dist/pkg/
-          chmod +x dist/pkg/run.sh
-          cp license dist/pkg/
+      - name: Parse Version
+        id: version
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag_name }}"
+          if [ -z "$TAG_NAME" ]; then
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "main" ]; then
+            TAG_NAME=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+          fi
+          echo "tag=${TAG_NAME}" >> "$GITHUB_OUTPUT"
 
-          (cd dist/pkg && zip -9 -r "../${PROJ}-${TAG}-win64.zip" .)
-          cp "build/bin/${PROJ}.dll" "dist/${PROJ}.dll"
-          cp "build/bin/${PROJ}_Injector.exe" "dist/${PROJ}_Injector.exe"
+          # Parse major version tag (e.g. v1 from v1.3.0, v0 from v0.1.0)
+          if [[ "$TAG_NAME" =~ ^v([0-9]+) ]]; then
+            echo "major=v${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "major=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          fi
 
-          (cd dist && sha256sum \
-            "${PROJ}-${TAG}-win64.zip" \
-            "${PROJ}.dll" \
-            "${PROJ}_Injector.exe" > SHA256SUMS.txt)
+      - name: Archive Old Major Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          releases=$(gh release list --json tagName,name -L 100 2>/dev/null) || releases="[]"
+          current_major="${{ steps.version.outputs.major }}"
 
-          cat dist/SHA256SUMS.txt
+          echo "$releases" | jq -c '.[]' | while read -r release; do
+            tag=$(echo "$release" | jq -r .tagName)
+            name=$(echo "$release" | jq -r .name)
 
-      - name: Build release notes
+            # Skip the current major version release
+            if [ "$tag" = "$current_major" ]; then
+              continue
+            fi
+
+            # Archive older major release
+            if [[ "$name" != *"[Archived]"* ]]; then
+              echo "Archiving older release $tag..."
+              gh release edit "$tag" --title "[Archived] $name" || true
+            fi
+          done
+
+      - name: Cleanup Old Full Tags
+        run: |
+          git fetch --tags
+          tags=$(git tag -l "v*.*.*" | sort -V)
+          tag_count=$(echo "$tags" | grep -c . || true)
+
+          # Keep latest 2 full tags to prevent tag clutter
+          if [ "$tag_count" -gt 2 ]; then
+            tags_to_delete=$(echo "$tags" | head -n -2)
+            for t in $tags_to_delete; do
+              echo "Deleting old tag: $t"
+              git push origin --delete "$t" || true
+            done
+          fi
+
+      - name: Create Release Archive
         run: |
           PROJ="${{ steps.meta.outputs.project }}"
-          VER="${{ steps.meta.outputs.version }}"
-          BID="${{ steps.meta.outputs.build_id }}"
-          TAG="${{ steps.meta.outputs.tag }}"
+          mkdir -p "${PROJ}"
+          cp "build/bin/${PROJ}.dll" "${PROJ}/"
+          cp "build/bin/${PROJ}_Injector.exe" "${PROJ}/"
+          zip -9 -r "PG2-Release-${{ steps.version.outputs.tag }}.zip" "${PROJ}/"
 
-          {
-            echo "## ${PROJ} ${TAG}"
-            echo ""
-            echo "| Field | Value |"
-            echo "| :--- | :--- |"
-            echo "| **Game Version** | \`${VER}\` |"
-            echo "| **Steam Build ID** | \`${BID}\` |"
-            echo ""
-            echo "### SHA-256 Checksums"
-            echo '```text'
-            cat dist/SHA256SUMS.txt
-            echo '```'
-          } > dist/RELEASE_NOTES.md
-
-      - name: Publish GitHub Release
+      - name: Generate Release Notes
+        id: release_notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PROJ="${{ steps.meta.outputs.project }}"
-          TAG="${{ steps.meta.outputs.tag }}"
+          GAME_VER="${{ steps.meta.outputs.game_version }}"
+          BUILD_ID="${{ steps.meta.outputs.build_id }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          REPO="${{ github.repository }}"
 
-          ASSETS=(
-            "dist/${PROJ}-${TAG}-win64.zip"
-            "dist/${PROJ}.dll"
-            "dist/${PROJ}_Injector.exe"
-            "dist/SHA256SUMS.txt"
-          )
-
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release upload "${TAG}" "${ASSETS[@]}" --clobber
-            gh release edit "${TAG}" --notes-file dist/RELEASE_NOTES.md
+          # Identify previous tag to build a diff range
+          PREV_TAG=$(git tag -l "v*.*.*" | grep -v "^${TAG}$" | sort -V | tail -n 1 2>/dev/null || true)
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${TAG}"
+            SUBTITLE="Changes since \`${PREV_TAG}\`"
           else
-            FLAGS=(--title "${PROJ} ${TAG}" --notes-file dist/RELEASE_NOTES.md --generate-notes)
-            if [[ "${{ inputs.prerelease }}" == "true" ]]; then
-              FLAGS+=(--prerelease)
-            fi
-            if [[ "${{ inputs.draft }}" == "true" ]]; then
-              FLAGS+=(--draft)
-            fi
-            gh release create "${TAG}" "${ASSETS[@]}" "${FLAGS[@]}"
+            RANGE="${TAG}"
+            SUBTITLE="Release \`${TAG}\`"
           fi
 
-      - name: Write workflow summary
+          echo "Generating verbose release notes for ${RANGE}..."
+
+          {
+            echo "## Pixel Gun 2 Cheetos — ${TAG}"
+            echo "**${SUBTITLE}** | Game Version: \`${GAME_VER}\` (Steam Build \`${BUILD_ID}\`)"
+            echo ""
+            echo "### Source Code Modifications"
+            echo ""
+          } > release_notes.md
+
+          # Extract commit history targeting src/ (excluding vendor/)
+          COMMITS=$(git log "${RANGE}" --pretty=format:"%H" -- src/ ":(exclude)src/vendor" 2>/dev/null || true)
+
+          if [ -n "$COMMITS" ]; then
+            for commit in $COMMITS; do
+              SUBJECT=$(git log -1 --pretty=format:"%s" "$commit")
+              AUTHOR=$(git log -1 --pretty=format:"%an" "$commit")
+              SHORT_HASH=$(git log -1 --pretty=format:"%h" "$commit")
+              BODY=$(git log -1 --pretty=format:"%b" "$commit" | sed '/^[[:space:]]*$/d')
+
+              echo "- **${SUBJECT}** ([\`${SHORT_HASH}\`](https://github.com/${REPO}/commit/${commit})) by @${AUTHOR}" >> release_notes.md
+              if [ -n "$BODY" ]; then
+                echo "  > ${BODY}" >> release_notes.md
+              fi
+            done
+          else
+            echo "_No direct changes to \`src/\` in this release range._" >> release_notes.md
+          fi
+
+          # Fetch GitHub generated release notes (or fallback to git log) and format with compact links
+          GH_NOTES=$(gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/releases/generate-notes" \
+            -f tag_name="${TAG}" \
+            --jq .body 2>/dev/null || true)
+
+          if [ -n "$GH_NOTES" ]; then
+            echo "" >> release_notes.md
+            echo "$GH_NOTES" | sed -E 's|https://github\.com/[^/]+/[^/]+/pull/([0-9]+)|[#\1](\0)|g; s|https://github\.com/[^/]+/[^/]+/compare/([^ ]+)|[\1](\0)|g' >> release_notes.md
+          else
+            echo "" >> release_notes.md
+            echo "### Changelog" >> release_notes.md
+            echo "" >> release_notes.md
+            git log "${RANGE}" --pretty=format:"- %s ([%h](https://github.com/${REPO}/commit/%H))" >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          echo "" >> release_notes.md
+          echo "### SHA-256 Checksums" >> release_notes.md
+          echo '```text' >> release_notes.md
+          sha256sum "PG2-Release-${TAG}.zip" \
+                    "build/bin/${PROJ}.dll" \
+                    "build/bin/${PROJ}_Injector.exe" | sed 's|build/bin/||g' >> release_notes.md
+          echo '```' >> release_notes.md
+
+          cat << 'EOF' >> release_notes.md
+
+          > [!NOTE]
+          > Antivirus may flag injectors and/or the DLLs as false positives. You can verify package integrity against the SHA-256 checksums above.
+          EOF
+
+      - name: Cleanup Old Release Assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cat dist/RELEASE_NOTES.md >> "$GITHUB_STEP_SUMMARY"
+          if gh release view "${{ steps.version.outputs.major }}" > /dev/null 2>&1; then
+            echo "Release ${{ steps.version.outputs.major }} exists. Cleaning up old assets..."
+            assets=$(gh release view "${{ steps.version.outputs.major }}" --json assets -q '.assets[].name' 2>/dev/null) || assets=""
+            for asset in $assets; do
+              echo "Deleting old asset: $asset"
+              gh release delete-asset "${{ steps.version.outputs.major }}" "$asset" -y || true
+            done
+          else
+            echo "Release ${{ steps.version.outputs.major }} does not exist yet."
+          fi
+
+      - name: Update Floating Major Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -fa "${{ steps.version.outputs.major }}" -m "Release ${{ steps.version.outputs.major }}" || true
+          git push origin -f "${{ steps.version.outputs.major }}" || true
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: ${{ steps.version.outputs.major }}
+          name: PG2 ${{ steps.version.outputs.major }}
+          body_path: release_notes.md
+          files: PG2-Release-${{ steps.version.outputs.tag }}.zip
