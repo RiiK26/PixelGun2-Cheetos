@@ -103,13 +103,21 @@ namespace AOB
     if (ntHdr->Signature != IMAGE_NT_SIGNATURE)
       return 0;
 
-    // Prefer scanning the .text section for speed and accuracy
-    const auto* section = IMAGE_FIRST_SECTION(ntHdr);
+    // Scan all executable sections (e.g. .text, il2cpp) for speed and accuracy
+    const auto* section       = IMAGE_FIRST_SECTION(ntHdr);
+    bool        scannedAnySec = false;
     for (WORD i = 0; i < ntHdr->FileHeader.NumberOfSections; ++i, ++section) {
-      if (std::strncmp(reinterpret_cast<const char*>(section->Name), ".text", 5) == 0) {
+      if ((section->Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0) {
+        scannedAnySec        = true;
         const size_t secSize = section->Misc.VirtualSize ? section->Misc.VirtualSize : section->SizeOfRawData;
-        return ScanRange(base + section->VirtualAddress, secSize, pattern, offset);
+        if (uintptr_t hit = ScanRange(base + section->VirtualAddress, secSize, pattern, offset)) {
+          return hit;
+        }
       }
+    }
+
+    if (scannedAnySec) {
+      return 0;
     }
 
     return ScanRange(base, ntHdr->OptionalHeader.SizeOfImage, pattern, offset);

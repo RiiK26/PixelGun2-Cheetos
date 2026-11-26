@@ -21,10 +21,11 @@
 namespace fields
 {
   inline constexpr const char* kPlayerVisuals_CharacterView      = "_characterView";
-  inline constexpr const char* kPlayerVisuals_GameMode           = "_gameMode";
+  inline constexpr const char* kPlayerVisuals_Match              = "_match";
   inline constexpr const char* kPlayerVisuals_CurrentHitboxSet   = "_currentHitboxSet";
   inline constexpr const char* kPlayerVisuals_RenderedAliveState = "_renderedAliveState";
-  inline constexpr const char* kGameModePlayer_Name              = "<Name>k__BackingField";
+  inline constexpr const char* kPlayerStanding_Profile           = "<Profile>k__BackingField";
+  inline constexpr const char* kParticipantProfile_Name          = "<Name>k__BackingField";
 }  // namespace fields
 
 namespace offsets
@@ -37,39 +38,60 @@ namespace offsets
   inline constexpr int32_t kIl2CppArray_Items                = 0x20;
 
   // Visual / Player fields
-  inline constexpr int32_t kPlayerVisuals_CharacterView      = 0x88;
-  inline constexpr int32_t kPlayerVisuals_GameMode           = 0x120;
-  inline constexpr int32_t kPlayerVisuals_CurrentHitboxSet   = 0x150;
-  inline constexpr int32_t kPlayerVisuals_RenderedAliveState = 0x1D0;
+  inline constexpr int32_t kPlayerVisuals_CharacterView      = 0xC8;
+  inline constexpr int32_t kPlayerVisuals_Match              = 0x118;
+  inline constexpr int32_t kPlayerVisuals_CurrentHitboxSet   = 0x168;
+  inline constexpr int32_t kPlayerVisuals_RenderedAliveState = 0x25C;
   inline constexpr int32_t kHitboxSet_AimAssistHeadHitbox    = 0x38;
-  inline constexpr int32_t kGameModePlayer_Name              = 0x30;
+  inline constexpr int32_t kPlayerStanding_Profile           = 0x20;
+  inline constexpr int32_t kParticipantProfile_Name          = 0x10;
 }  // namespace offsets
 
 namespace RVA
 {
   // Visual / Player
-  inline constexpr uintptr_t kPlayerVisuals_Present               = 0x10EAAC0;
-  inline constexpr uintptr_t kPlayerVisuals_GetIsFpsCharacter     = 0x10EDD00;
-  inline constexpr uintptr_t kPlayerVisuals_GetPlayerTeamRelation = 0x10EDD50;
-  inline constexpr uintptr_t kPlayerVisuals_ApplyVisualEffect     = 0x10E85A0;
-  inline constexpr uintptr_t kPlayerVisuals_RemoveVisualEffect    = 0x10EBCB0;
-  inline constexpr uintptr_t kPlayerVisualLatePresent_LatePresent = 0x10E7570;
+  inline constexpr uintptr_t kPlayerVisuals_Present                      = 0x1223510;
+  inline constexpr uintptr_t kPlayerVisuals_GetIsFpsCharacter            = 0x122B350;
+  inline constexpr uintptr_t kPlayerVisuals_GetPlayerTeamRelation        = 0x122B400;
+  inline constexpr uintptr_t kPlayerVisuals_ApplyVisualEffect            = 0x121E8B0;
+  inline constexpr uintptr_t kPlayerVisuals_RemoveVisualEffect           = 0x1224AD0;
+  inline constexpr uintptr_t kPlayerVisualLatePresent_LatePresent        = 0x121CFC0;
 
   // ECS / GameMode
-  inline constexpr uintptr_t kEcsComponentBeh_GetId               = 0x11F7BC0;
-  inline constexpr uintptr_t kGameMode_TryGetGameModePlayerData   = 0x10676E0;
+  inline constexpr uintptr_t kEcsComponentBeh_GetId                      = 0x1425EF0;
+  inline constexpr uintptr_t kMatchPresentation_TryGetGameModePlayerData = 0x10335A0;
+  inline constexpr uintptr_t kPlayerStanding_GetName                     = 0x105A350;
 
   // UnityEngine
-  inline constexpr uintptr_t kCamera_GetMain                      = 0x703FE80;
-  inline constexpr uintptr_t kCamera_GetAllCameras                = 0x703E9A0;
-  inline constexpr uintptr_t kCamera_GetOrthographic              = 0x7040250;
-  inline constexpr uintptr_t kCamera_GetDepth                     = 0x703F6E0;
-  inline constexpr uintptr_t kCamera_WorldToViewportPoint         = 0x703E750;
-  inline constexpr uintptr_t kComponent_GetTransform              = 0x70C0FC0;
-  inline constexpr uintptr_t kTransform_GetPosition               = 0x70F62D0;
+  inline constexpr uintptr_t kCamera_GetMain                             = 0x921A5A0;
+  inline constexpr uintptr_t kCamera_GetAllCameras                       = 0x92194B0;
+  inline constexpr uintptr_t kCamera_GetOrthographic                     = 0x921A970;
+  inline constexpr uintptr_t kCamera_GetDepth                            = 0x9219C80;
+  inline constexpr uintptr_t kCamera_WorldToViewportPoint                = 0x92188D0;
+  inline constexpr uintptr_t kComponent_GetTransform                     = 0x92BB850;
+  inline constexpr uintptr_t kTransform_GetPosition                      = 0x93108B0;
 }  // namespace RVA
 
 namespace signatures
 {
-  // Tier 1 AOB byte patterns (populated as signatures are verified)
+  // Tier 1 AOB byte patterns (verified unique in release GameAssembly.dll build 26920624)
+  inline constexpr const char* kPlayerVisuals_Present =
+    "48 89 5C 24 10 48 89 4C 24 08 56 57 41 56 48 81 EC E0 00 00 00 0F 29 B4 24 D0 00 00 00 48 8B F9 80 3D ? ? ? ? 00 "
+    "75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6";
+  inline constexpr const char* kPlayerVisuals_GetIsFpsCharacter = "0F B6 81 B8 01 00 00 C3";
+  inline constexpr const char* kPlayerVisuals_GetPlayerTeamRelation =
+    "48 89 5C 24 08 57 48 83 EC 20 80 3D ? ? ? ? 00 48 8B D9 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 48 8B "
+    "BB 20 01 00 00 33 D2 48 8B CB E8 ? ? ? ? 33 D2 8B C8 E8 ? ? ? ? 8B D8 48 85 FF 0F 84 ? ? ? ? 4C 8B 17 33 C9 4C "
+    "8B 0D ? ? ? ? 41 0F B7 92 2E 01 00 00 66 3B CA 73 ? 4D 8B 82 B0 00 00 00 66 90 0F B7 C1 48 03 C0 4D 39 0C C0 74 "
+    "? 66 FF C1 66 3B CA 72 ? 41 B8 07 00";
+  inline constexpr const char* kPlayerVisuals_ApplyVisualEffect =
+    "48 89 5C 24 08 57 48 83 EC 30 48 8B D9 8B FA 48 8B 89";
+  inline constexpr const char* kPlayerVisualLatePresent_LatePresent = "48 89 5C 24 18 48 89 74 24 20 57 41 55 41 56 48";
+  inline constexpr const char* kMatchPresentation_TryGetGameModePlayerData =
+    "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 80 3D ? ? ? ? 00 49 8B F0 8B DA 48 8B F9 75 ? 48 8D 0D ? ? ? ? E8 ? "
+    "? ? ? C6 05 ? ? ? ? 01 48 8B 7F 10 48 85 FF 0F 84 ? ? ? ? 4C 8B 17 33 C9 4C 8B 0D ? ? ? ? 41 0F B7 92 2E 01 00 00 "
+    "66 3B CA 73 ? 4D 8B 82 B0 00 00 00 0F B7 C1 48 03 C0 4D 39 0C C0 74 ? 66 FF C1 66 3B CA 72 ? 41 B8 04 00";
+  inline constexpr const char* kPlayerStanding_GetName = "48 83 EC 38 48 8B 41 30 48 83 C4 38 C3";
+  inline constexpr const char* kCamera_GetAllCameras =
+    "40 53 48 83 EC 20 80 3D ? ? ? ? 00 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 48 8B 05 ? ? ? ? 48 85 C0";
 }  // namespace signatures

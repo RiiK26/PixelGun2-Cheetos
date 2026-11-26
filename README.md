@@ -1,4 +1,77 @@
+<div align="center">
+
+<img src="resources/images/pixelman.png" alt="PixelGun2-Cheetos" width="110" />
+
 # PixelGun2-Cheetos
+
+**Internal x64 C++20 Overlay & Trainer for Pixel Gun 2**
+
+[![C++20](https://img.shields.io/badge/C%2B%2B20-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)](https://isocpp.org/)
+[![DirectX](https://img.shields.io/badge/DirectX_11%2F12-107C10?style=for-the-badge&logo=xbox&logoColor=white)](#)
+[![Steam](https://img.shields.io/badge/Steam_AppID-3456950-1B2838?style=for-the-badge&logo=steam&logoColor=white)](https://store.steampowered.com/app/3456950/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-D22128?style=for-the-badge&logo=apache&logoColor=white)](LICENSE)
+
+*ImGui DX11/DX12 overlay • MinHook • 3-tier AOB / IL2CPP / Static RVA resolver • Automated post-patch tooling*
+
+</div>
+
+## Features
+
+| Category | Feature | Description |
+| :--- | :--- | :--- |
+| **Visual** | **ESP Body** | X-Ray player highlight through walls (`ApplyVisualEffect`) |
+| **Visual** | **ESP Box** | 2D bounding boxes projected via the active gameplay camera |
+| **Visual** | **ESP Name** | Live player nametags via `MatchPresentation` / `PlayerStanding` |
+| **Visual** | **Team Check** | Filters teammates out of ESP rendering |
+
+### Controls
+
+| Key | Action |
+| :--- | :--- |
+| `INSERT` | Toggle menu |
+| `↑` / `↓` / `←` / `→` | Navigate & adjust sliders |
+| `ENTER` | Toggle option / run action |
+| `END` | Unload DLL cleanly |
+
+## Quick Start
+
+### Windows
+1. Place `PG2-Cheetos.dll` and `PG2-Cheetos_Injector.exe` in the same folder.
+2. Launch **Pixel Gun 2**, then run `PG2-Cheetos_Injector.exe`.
+3. Press `INSERT` in-game to open the menu.
+
+### Linux (Steam / Proton)
+Requires [`protontricks`](https://github.com/Matoking/protontricks) (native or Flatpak):
+
+```bash
+# Inject into a running Pixel Gun 2 session
+./resources/scripts/run.sh inject
+
+# Or add to Steam Launch Options:
+# /path/to/resources/scripts/run.sh %command%
+```
+
+<details>
+<summary><b>Building from Source</b></summary>
+<br>
+
+Only `Release` (logging stripped) and `Debug` (`ENABLE_DEBUG_LOG` enabled) configurations are supported.
+
+#### Linux / macOS (MinGW-w64 Cross-Compile)
+Requires `cmake` (3.20+), `ninja` (or `make`), and `x86_64-w64-mingw32-g++`:
+
+```bash
+./resources/scripts/build release --injector   # Release DLL + Injector
+./resources/scripts/build debug --injector     # Debug DLL + Injector
+```
+
+#### Windows (MSVC)
+```powershell
+cmake -B build -G Ninja -DBUILD_INJECTOR=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+Binaries are output to `build/bin/`.
+</details>
 
 ## Support & Donations
 
@@ -23,6 +96,6 @@ If you find this project valuable and wish to support its ongoing development an
 
 </details>
 
-## LICENSE
+## License
 
-This project is licensed under **Apache License 2.0** — see the [LICENSE](license) for full details.
+This project licensed under [**Apache License 2.0**](LICENSE)

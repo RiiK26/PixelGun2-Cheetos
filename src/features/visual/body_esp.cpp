@@ -28,18 +28,29 @@ namespace Visual::BodyEsp
 {
   enum class TypeVisualEffects : int32_t
   {
-    None            = 0,
-    EnemyOutline    = 1,
-    TeammateOutline = 2,
-    Invisible       = 4,
-    XrayOutline     = 8,
-    XrayFill        = 16,
-    XrayTeammate    = 32,
-    XrayEnemy       = 64,
-    GlowTeammate    = 128,
-    GlowEnemy       = 256,
-    XrayFillRed     = 512,
-    Invincibility   = 1024,
+    None                     = 0,
+    EnemyOutline             = 1,
+    TeammateOutline          = 2,
+    Invisible                = 4,
+    XrayOutline              = 8,
+    XrayKillCamTarget        = 16,
+    XrayEquipmentTeammate    = 32,
+    XrayEquipmentEnemy       = 64,
+    GlowTeammate             = 128,
+    GlowEnemy                = 256,
+    XrayTutorialTarget       = 512,
+    Invincibility            = 1024,
+    ShieldEffect             = 2048,
+    XrayBountyHunterTeammate = 4096,
+    XrayBountyHunterEnemy    = 8192,
+    GlowFriend               = 16384,
+    CharacterHidden          = 32768,
+    PveKnockdownOutline      = 65536,
+    PveReviveOutline         = 131072,
+    PveKnockdownXray         = 262144,
+    PveReviveXray            = 524288,
+    PveKnockdownGlow         = 1048576,
+    PveReviveGlow            = 2097152,
   };
 
   using PlayerVisuals_ApplyVisualEffect_t                           = void (*)(void* self, TypeVisualEffects effect);
@@ -105,6 +116,7 @@ namespace Visual::BodyEsp
 
     auto                  applyRes  = Resolver::ResolveMethod({
       .name       = "PlayerVisuals::ApplyVisualEffect",
+      .aobPattern = signatures::kPlayerVisuals_ApplyVisualEffect,
       .namespaze  = kPlayerNs,
       .className  = "PlayerVisuals",
       .methodName = "ApplyVisualEffect",
@@ -160,9 +172,10 @@ namespace Visual::BodyEsp
       return;
     }
 
-    // XrayFillRed (512) for enemies; XrayTeammate (32) for teammates
-    TypeVisualEffects desired = isEnemy ? TypeVisualEffects::XrayFillRed : TypeVisualEffects::XrayTeammate;
-    auto              it      = g_appliedXray.find(key);
+    // XrayTutorialTarget (512) for enemies; XrayEquipmentTeammate (32) for teammates
+    TypeVisualEffects desired =
+      isEnemy ? TypeVisualEffects::XrayTutorialTarget : TypeVisualEffects::XrayEquipmentTeammate;
+    auto it = g_appliedXray.find(key);
     if (it != g_appliedXray.end() && it->second == desired) {
       return;
     }

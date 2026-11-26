@@ -20,7 +20,7 @@ else
     BIN_DIR="$PROJECT_ROOT/build/bin"
 fi
 
-STEAM_APP_ID="4595900"
+STEAM_APP_ID="3456950"
 
 PROJECT_NAME="PG2-Cheetos"
 if [ -f "$CONFIG_FILE" ]; then
@@ -62,7 +62,6 @@ find_game_dir() {
         "$HOME/.steam/steam"
         "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam"
         "$HOME/Library/Application Support/Steam"
-        "/data/SteamLibrary"
     )
 
     local libraries=()
@@ -91,7 +90,7 @@ find_game_dir() {
             fi
         fi
 
-        for candidate in "$lib/steamapps/common/Pixel Gun 2 Demo" "$lib/steamapps/common/Pixel Gun 2"; do
+        for candidate in "$lib/steamapps/common/Pixel Gun 2" "$lib/steamapps/common/Pixel Gun 2"; do
             if [ -d "$candidate" ]; then
                 echo "$candidate"
                 return 0
@@ -104,7 +103,7 @@ find_game_dir() {
 
 # Check if actual Windows game executable is running under Wine/Proton
 is_game_running() {
-    pgrep -f -i "Pixel Gun 2 Demo\.exe" >/dev/null 2>&1
+    pgrep -f -i "Pixel Gun 2\.exe" >/dev/null 2>&1
 }
 
 check_build() {
@@ -163,7 +162,7 @@ launch_wine() {
     fi
 
     echo ""
-    info "Waiting for Pixel Gun 2 Demo.exe (timeout: 90s)..."
+    info "Waiting for Pixel Gun 2.exe (timeout: 90s)..."
 
     local retries=0
     local max_retries=90
@@ -194,8 +193,8 @@ locate_game() {
         warn "Game not found in default Steam paths."
         echo ""
         info "Searched in:"
-        echo "    ~/.local/share/Steam/steamapps/common/Pixel Gun 2 Demo"
-        echo "    ~/.steam/steam/steamapps/common/Pixel Gun 2 Demo"
+        echo "    ~/.local/share/Steam/steamapps/common/Pixel Gun 2"
+        echo "    ~/.steam/steam/steamapps/common/Pixel Gun 2"
         echo "    ~/.var/app/com.valvesoftware.Steam/..."
     fi
 }

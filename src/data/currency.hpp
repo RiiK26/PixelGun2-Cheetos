@@ -20,9 +20,10 @@
 
 enum class CurrencyEnum : int
 {
-  None = 0,
-  Hard = 7000001,  // Shards
-  Soft = 7000002,  // Coins
+  None  = 0,
+  Hard  = 7000001,  // Shards
+  Soft  = 7000002,  // Coins
+  Super = 7000003,
 };
 
 enum class ResourceEnum : int

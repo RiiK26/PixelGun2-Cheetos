@@ -147,8 +147,8 @@ static bool ContainsCaseInsensitive(std::wstring_view haystack, std::wstring_vie
 }
 
 // Known process names for Pixel Gun 2
-static constexpr std::array<const wchar_t*, 4> GAME_PROCESS_NAMES = {
-  L"Pixel Gun 2 Demo.exe",  // Currently still "demo". remove the demo after the game release
+static constexpr std::array<const wchar_t*, 1> GAME_PROCESS_NAMES = {
+  L"Pixel Gun 2.exe",
 };
 
 struct ProcessResult
@@ -160,7 +160,7 @@ struct ProcessResult
 static bool IsExactMatch(const wchar_t* exeName) noexcept
 {
   for (const wchar_t* name : GAME_PROCESS_NAMES) {
-    if (_wcsicmp(exeName, name) == 0) {
+    if (name && _wcsicmp(exeName, name) == 0) {
       return true;
     }
   }
@@ -472,7 +472,7 @@ int main(int argc, char* argv[])
   // Wait for game process
   SetColor(COLOR_YELLOW);
   std::cout << "  [*] Waiting for Pixel Gun 2 (timeout: " << timeoutSeconds << "s)..." << std::endl;
-  std::cout << "  [*] Scanning for: Pixel Gun 2.exe, PixelGun2.exe, pg2.exe, ..." << std::endl;
+  std::cout << "  [*] Scanning for: Pixel Gun 2.exe" << std::endl;
   SetColor(COLOR_DEFAULT);
 
   if (debugMode) {
@@ -573,7 +573,7 @@ int main(int argc, char* argv[])
     SetColor(COLOR_RED);
     std::cout << "  [!] Injection failed!" << std::endl;
     std::cout << "  [!] Make sure you are running in the same Wine/Proton prefix as the game." << std::endl;
-    std::cout << "  [!] On Linux, use: protontricks -c 'wine " << INJECTOR_NAME << "' 2524890" << std::endl;
+    std::cout << "  [!] On Linux, use: protontricks -c 'wine " << INJECTOR_NAME << "' 3456950" << std::endl;
     SetColor(COLOR_DEFAULT);
   }
 

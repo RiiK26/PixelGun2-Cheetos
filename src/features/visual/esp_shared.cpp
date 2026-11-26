@@ -67,21 +67,24 @@ namespace Visual::EspShared
   using PlayerVisuals_GetIsFpsCharacter_t     = bool (*)(void* self);
   using PlayerVisuals_GetPlayerTeamRelation_t = TeamRelation (*)(void* self);
   using EcsComponentBeh_GetId_t               = NetworkId (*)(void* self);
-  using GameMode_TryGetGameModePlayerData_t   = bool (*)(void* self, NetworkId entityId, void** outPlayerData);
-  using Camera_GetMain_t                      = void* (*)();
-  using Camera_GetAllCameras_t                = void* (*)();
-  using Camera_GetOrthographic_t              = bool (*)(void* camera);
-  using Camera_GetDepth_t                     = float (*)(void* camera);
-  using Camera_WorldToViewportPoint_t         = Vector3 (*)(void* camera, Vector3 position);
-  using Component_GetTransform_t              = void* (*)(void* component);
-  using Transform_GetPosition_t               = Vector3 (*)(void* transform);
+  using MatchPresentation_TryGetGameModePlayerData_t =
+    bool (*)(void* self, NetworkId entityRef, void** outPlayerStanding);
+  using PlayerStanding_GetName_t                                        = const void* (*)(void* self);
+  using Camera_GetMain_t                                                = void* (*)();
+  using Camera_GetAllCameras_t                                          = void* (*)();
+  using Camera_GetOrthographic_t                                        = bool (*)(void* camera);
+  using Camera_GetDepth_t                                               = float (*)(void* camera);
+  using Camera_WorldToViewportPoint_t                                   = Vector3 (*)(void* camera, Vector3 position);
+  using Component_GetTransform_t                                        = void* (*)(void* component);
+  using Transform_GetPosition_t                                         = Vector3 (*)(void* transform);
 
-  static PlayerVisuals_Present_t                      g_origPresent             = nullptr;
-  static PlayerVisualLatePresent_LatePresent_t        g_origLatePresent         = nullptr;
+  static PlayerVisuals_Present_t                      g_origPresent     = nullptr;
+  static PlayerVisualLatePresent_LatePresent_t        g_origLatePresent = nullptr;
   static PlayerVisuals_GetIsFpsCharacter_t            g_fnGetIsFpsCharacter     = nullptr;
   static PlayerVisuals_GetPlayerTeamRelation_t        g_fnGetPlayerTeamRelation = nullptr;
   static EcsComponentBeh_GetId_t                      g_fnGetId                 = nullptr;
-  static GameMode_TryGetGameModePlayerData_t          g_fnTryGetPlayerData      = nullptr;
+  static MatchPresentation_TryGetGameModePlayerData_t g_fnTryGetPlayerData      = nullptr;
+  static PlayerStanding_GetName_t                     g_fnPlayerStandingGetName = nullptr;
   static Camera_GetMain_t                             g_fnCameraGetMain         = nullptr;
   static Camera_GetAllCameras_t                       g_fnCameraGetAll          = nullptr;
   static Camera_GetOrthographic_t                     g_fnCameraGetOrthographic = nullptr;
@@ -91,15 +94,15 @@ namespace Visual::EspShared
   static Transform_GetPosition_t                      g_fnTransformGetPosition  = nullptr;
 
   static int32_t                                      g_offCharacterView        = offsets::kPlayerVisuals_CharacterView;
-  static int32_t                                      g_offGameMode             = offsets::kPlayerVisuals_GameMode;
+  static int32_t                                      g_offMatch                = offsets::kPlayerVisuals_Match;
   static int32_t                                      g_offCurrentHitboxSet = offsets::kPlayerVisuals_CurrentHitboxSet;
   static int32_t                                      g_offRenderedAlive = offsets::kPlayerVisuals_RenderedAliveState;
   static int32_t                                      g_offHeadHitbox    = offsets::kHitboxSet_AimAssistHeadHitbox;
-  static int32_t                                      g_offPlayerName    = offsets::kGameModePlayer_Name;
+  static int32_t    g_offPlayerName = offsets::kPlayerStanding_Profile + offsets::kParticipantProfile_Name;
 
   // Double-buffered snapshots: LatePresent builds into g_stagingSnapshots (lock-free),
   // swaps once into g_publishedSnapshots; RenderOverlay copies once into g_renderSnapshots.
-  static std::mutex                                   g_snapshotMutex;
+  static std::mutex g_snapshotMutex;
   static std::vector<PlayerSnapshot>                  g_stagingSnapshots;
   static std::vector<PlayerSnapshot>                  g_publishedSnapshots;
   static std::vector<PlayerSnapshot>                  g_renderSnapshots;
@@ -299,16 +302,18 @@ namespace Visual::EspShared
     if (nameOn) {
       if (
         !tracked.hasName && (nowMs - tracked.lastNameQueryMs) >= 1000 && g_fnGetId && g_fnTryGetPlayerData
-        && g_offGameMode > 0 && g_offPlayerName > 0
+        && g_offMatch > 0 && (g_fnPlayerStandingGetName || g_offPlayerName > 0)
       ) {
         tracked.lastNameQueryMs = nowMs;
-        void* gameMode          = *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(self) + g_offGameMode);
-        if (gameMode) {
-          NetworkId id         = g_fnGetId(self);
-          void*     playerData = nullptr;
-          if (g_fnTryGetPlayerData(gameMode, id, &playerData) && playerData) {
+        void* match             = *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(self) + g_offMatch);
+        if (match) {
+          NetworkId id             = g_fnGetId(self);
+          void*     playerStanding = nullptr;
+          if (g_fnTryGetPlayerData(match, id, &playerStanding) && playerStanding) {
             const void* nameStr =
-              *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(playerData) + g_offPlayerName);
+              g_fnPlayerStandingGetName
+                ? g_fnPlayerStandingGetName(playerStanding)
+                : *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(playerStanding) + g_offPlayerName);
             tracked.hasName = ReadIl2CppStringUtf8(nameStr, tracked.cachedName, sizeof(tracked.cachedName));
           }
         }
@@ -393,6 +398,7 @@ namespace Visual::EspShared
 
     auto                  presentRes  = Resolver::ResolveMethod({
       .name       = "PlayerVisuals::Present",
+      .aobPattern = signatures::kPlayerVisuals_Present,
       .namespaze  = kPlayerNs,
       .className  = "PlayerVisuals",
       .methodName = "Present",
@@ -414,6 +420,7 @@ namespace Visual::EspShared
 
     g_fnGetIsFpsCharacter     = reinterpret_cast<PlayerVisuals_GetIsFpsCharacter_t>(resolveFn({
       .name       = "PlayerVisuals::get_IsFpsCharacter",
+      .aobPattern = signatures::kPlayerVisuals_GetIsFpsCharacter,
       .namespaze  = kPlayerNs,
       .className  = "PlayerVisuals",
       .methodName = "get_IsFpsCharacter",
@@ -423,6 +430,7 @@ namespace Visual::EspShared
 
     g_fnGetPlayerTeamRelation = reinterpret_cast<PlayerVisuals_GetPlayerTeamRelation_t>(resolveFn({
       .name       = "PlayerVisuals::get_PlayerTeamRelation",
+      .aobPattern = signatures::kPlayerVisuals_GetPlayerTeamRelation,
       .namespaze  = kPlayerNs,
       .className  = "PlayerVisuals",
       .methodName = "get_PlayerTeamRelation",
@@ -432,20 +440,29 @@ namespace Visual::EspShared
 
     g_fnGetId                 = reinterpret_cast<EcsComponentBeh_GetId_t>(resolveFn({
       .name       = "EcsComponentBeh::get_Id",
-      .namespaze  = "Psa.Core.Modules.ECS.Components",
+      .namespaze  = "Psa.Core.Modules.Base.Ecs.Entities.Implementation",
       .className  = "EcsComponentBeh",
       .methodName = "get_Id",
       .argCount   = 0,
       .staticRva  = RVA::kEcsComponentBeh_GetId,
     }));
 
-    g_fnTryGetPlayerData      = reinterpret_cast<GameMode_TryGetGameModePlayerData_t>(resolveFn({
-      .name       = "GameMode::TryGetGameModePlayerData",
+    // Note: MatchPresentation has two 2-arg overloads (PlayerId vs EntityRef); skip Tier 2 name-only lookup
+    // so we never bind the PlayerId overload by accident.
+    g_fnTryGetPlayerData      = reinterpret_cast<MatchPresentation_TryGetGameModePlayerData_t>(resolveFn({
+      .name       = "MatchPresentation::TryGetGameModePlayerData(EntityRef)",
+      .aobPattern = signatures::kMatchPresentation_TryGetGameModePlayerData,
+      .staticRva  = RVA::kMatchPresentation_TryGetGameModePlayerData,
+    }));
+
+    g_fnPlayerStandingGetName = reinterpret_cast<PlayerStanding_GetName_t>(resolveFn({
+      .name       = "PlayerStanding::get_Name",
+      .aobPattern = signatures::kPlayerStanding_GetName,
       .namespaze  = kGameModeNs,
-      .className  = "GameMode",
-      .methodName = "TryGetGameModePlayerData",
-      .argCount   = 2,
-      .staticRva  = RVA::kGameMode_TryGetGameModePlayerData,
+      .className  = "PlayerStanding",
+      .methodName = "get_Name",
+      .argCount   = 0,
+      .staticRva  = RVA::kPlayerStanding_GetName,
     }));
 
     g_fnCameraGetMain         = reinterpret_cast<Camera_GetMain_t>(resolveFn({
@@ -459,6 +476,7 @@ namespace Visual::EspShared
 
     g_fnCameraGetAll          = reinterpret_cast<Camera_GetAllCameras_t>(resolveFn({
       .name       = "Camera::get_allCameras",
+      .aobPattern = signatures::kCamera_GetAllCameras,
       .namespaze  = kUnityNs,
       .className  = "Camera",
       .methodName = "get_allCameras",
@@ -519,12 +537,12 @@ namespace Visual::EspShared
       .staticOffset = offsets::kPlayerVisuals_CharacterView,
     });
 
-    g_offGameMode             = Resolver::ResolveFieldOffset({
-      .name         = "PlayerVisuals::_gameMode",
+    g_offMatch                = Resolver::ResolveFieldOffset({
+      .name         = "PlayerVisuals::_match",
       .namespaze    = kPlayerNs,
       .className    = "PlayerVisuals",
-      .fieldName    = fields::kPlayerVisuals_GameMode,
-      .staticOffset = offsets::kPlayerVisuals_GameMode,
+      .fieldName    = fields::kPlayerVisuals_Match,
+      .staticOffset = offsets::kPlayerVisuals_Match,
     });
 
     g_offCurrentHitboxSet     = Resolver::ResolveFieldOffset({
@@ -543,15 +561,17 @@ namespace Visual::EspShared
       .staticOffset = offsets::kPlayerVisuals_RenderedAliveState,
     });
 
-    g_offPlayerName           = Resolver::ResolveFieldOffset({
-      .name         = "GameModePlayer::<Name>k__BackingField",
+    int32_t offProfile        = Resolver::ResolveFieldOffset({
+      .name         = "PlayerStanding::<Profile>k__BackingField",
       .namespaze    = kGameModeNs,
-      .className    = "GameModePlayer",
-      .fieldName    = fields::kGameModePlayer_Name,
-      .staticOffset = offsets::kGameModePlayer_Name,
+      .className    = "PlayerStanding",
+      .fieldName    = fields::kPlayerStanding_Profile,
+      .staticOffset = offsets::kPlayerStanding_Profile,
     });
+    g_offPlayerName  = (offProfile >= 0) ? (offProfile + offsets::kParticipantProfile_Name)
+                                         : (offsets::kPlayerStanding_Profile + offsets::kParticipantProfile_Name);
 
-    MH_STATUS status          = MH_CreateHook(
+    MH_STATUS status = MH_CreateHook(
       reinterpret_cast<LPVOID>(presentRes.address), reinterpret_cast<LPVOID>(&HookedPlayerVisualsPresent),
       reinterpret_cast<LPVOID*>(&g_origPresent)
     );
@@ -562,6 +582,7 @@ namespace Visual::EspShared
 
     auto latePresentRes = Resolver::ResolveMethod({
       .name       = "PlayerVisualLatePresentSystem::LatePresent",
+      .aobPattern = signatures::kPlayerVisualLatePresent_LatePresent,
       .namespaze  = "Psa.Core.Modules.Player",
       .className  = "PlayerVisualLatePresentSystem",
       .methodName = "LatePresent",

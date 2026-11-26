@@ -1,14 +1,55 @@
 {
 	"project": "PG2-Cheetos",
-	"cheetos-version": "v0.0.1",
-	"steam-build-id": "",
-	"assembly_sha256": "",
+	"version": "0109.0.11593",
+	"steam-build-id": "26948004",
+	"assembly_sha256": "bf35ffef1e7593a069707e3a34d34af79176580e103dbc8cfee3e6f394325544",
 	"signatures_summary": {
-		"total": "",
-		"ok": "",
-		"broken": "",
-		"used": "",
-		"dormant": ""
+		"total": 8,
+		"ok": 8,
+		"broken": 0,
+		"used": 8,
+		"dormant": 0
 	},
-	"signatures": {}
+	"signatures": {
+		"kPlayerVisuals_Present": {
+			"rva": "0x1223510",
+			"pattern": "48 89 5C 24 10 48 89 4C 24 08 56 57 41 56 48 81 EC E0 00 00 00 0F 29 B4 24 D0 00 00 00 48 8B F9 80 3D ? ? ? ? 00 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6",
+			"status": "ok"
+		},
+		"kPlayerVisuals_GetIsFpsCharacter": {
+			"rva": "0x122B350",
+			"pattern": "0F B6 81 B8 01 00 00 C3",
+			"status": "ok"
+		},
+		"kPlayerVisuals_GetPlayerTeamRelation": {
+			"rva": "0x122B400",
+			"pattern": "48 89 5C 24 08 57 48 83 EC 20 80 3D ? ? ? ? 00 48 8B D9 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 48 8B BB 20 01 00 00 33 D2 48 8B CB E8 ? ? ? ? 33 D2 8B C8 E8 ? ? ? ? 8B D8 48 85 FF 0F 84 ? ? ? ? 4C 8B 17 33 C9 4C 8B 0D ? ? ? ? 41 0F B7 92 2E 01 00 00 66 3B CA 73 ? 4D 8B 82 B0 00 00 00 66 90 0F B7 C1 48 03 C0 4D 39 0C C0 74 ? 66 FF C1 66 3B CA 72 ? 41 B8 07 00",
+			"status": "ok"
+		},
+		"kPlayerVisuals_ApplyVisualEffect": {
+			"rva": "0x121E8B0",
+			"pattern": "48 89 5C 24 08 57 48 83 EC 30 48 8B D9 8B FA 48 8B 89",
+			"status": "ok"
+		},
+		"kPlayerVisualLatePresent_LatePresent": {
+			"rva": "0x121CFC0",
+			"pattern": "48 89 5C 24 18 48 89 74 24 20 57 41 55 41 56 48",
+			"status": "ok"
+		},
+		"kMatchPresentation_TryGetGameModePlayerData": {
+			"rva": "0x10335A0",
+			"pattern": "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 80 3D ? ? ? ? 00 49 8B F0 8B DA 48 8B F9 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 48 8B 7F 10 48 85 FF 0F 84 ? ? ? ? 4C 8B 17 33 C9 4C 8B 0D ? ? ? ? 41 0F B7 92 2E 01 00 00 66 3B CA 73 ? 4D 8B 82 B0 00 00 00 0F B7 C1 48 03 C0 4D 39 0C C0 74 ? 66 FF C1 66 3B CA 72 ? 41 B8 04 00",
+			"status": "ok"
+		},
+		"kPlayerStanding_GetName": {
+			"rva": "0x105A350",
+			"pattern": "48 83 EC 38 48 8B 41 30 48 83 C4 38 C3",
+			"status": "ok"
+		},
+		"kCamera_GetAllCameras": {
+			"rva": "0x92194B0",
+			"pattern": "40 53 48 83 EC 20 80 3D ? ? ? ? 00 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 48 8B 05 ? ? ? ? 48 85 C0",
+			"status": "ok"
+		}
+	}
 }

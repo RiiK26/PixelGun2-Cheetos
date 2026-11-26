@@ -25,7 +25,7 @@ namespace AOB
   // Returns the matched address + offset, or 0 if not found.
   uintptr_t ScanRange(uintptr_t start, size_t size, const char* pattern, int32_t offset = 0);
 
-  // Scans a loaded module's executable (.text) section (falling back to full image) for a pattern.
+  // Scans a loaded module's executable sections (e.g. .text, il2cpp), falling back to full image.
   // Returns the matched address + offset, or 0 if not found.
   uintptr_t ScanModule(HMODULE hModule, const char* pattern, int32_t offset = 0);
 }  // namespace AOB
