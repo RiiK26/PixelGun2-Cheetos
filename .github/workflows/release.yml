@@ -1,0 +1,161 @@
+name: "Release"
+
+on:
+  push:
+    tags:
+      - "v*"
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (leave empty to use v<version> from config.json)"
+        required: false
+        type: string
+        default: ""
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: "Create as draft release"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read project metadata from config.json
+        id: meta
+        run: |
+          python3 - << 'EOF'
+          import json, os
+
+          cfg = json.load(open("config.json", encoding="utf-8"))
+          project = cfg.get("project", "PG2-Cheetos")
+          version = cfg.get("version", "0.0.0").lstrip("vV")
+          build_id = cfg.get("steam-build-id", "unknown")
+
+          ref_name = os.environ.get("GITHUB_REF_NAME", "")
+          ref_type = os.environ.get("GITHUB_REF_TYPE", "")
+          input_tag = os.environ.get("INPUT_TAG", "").strip()
+
+          if ref_type == "tag" and ref_name:
+              tag = ref_name
+          elif input_tag:
+              tag = input_tag if input_tag.startswith("v") else f"v{input_tag}"
+          else:
+              tag = f"v{version}"
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"project={project}\n")
+              out.write(f"version={version}\n")
+              out.write(f"build_id={build_id}\n")
+              out.write(f"tag={tag}\n")
+          EOF
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 ninja-build zip
+
+      - name: Build Release (DLL + Injector)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=resources/cmake/mingw-toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_INJECTOR=ON
+          cmake --build build -j"$(nproc)"
+
+      - name: Package release assets & checksums
+        run: |
+          PROJ="${{ steps.meta.outputs.project }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
+          mkdir -p dist/pkg
+          cp "build/bin/${PROJ}.dll" dist/pkg/
+          cp "build/bin/${PROJ}_Injector.exe" dist/pkg/
+          cp resources/scripts/run.sh dist/pkg/
+          chmod +x dist/pkg/run.sh
+          cp license dist/pkg/
+
+          (cd dist/pkg && zip -9 -r "../${PROJ}-${TAG}-win64.zip" .)
+          cp "build/bin/${PROJ}.dll" "dist/${PROJ}.dll"
+          cp "build/bin/${PROJ}_Injector.exe" "dist/${PROJ}_Injector.exe"
+
+          (cd dist && sha256sum \
+            "${PROJ}-${TAG}-win64.zip" \
+            "${PROJ}.dll" \
+            "${PROJ}_Injector.exe" > SHA256SUMS.txt)
+
+          cat dist/SHA256SUMS.txt
+
+      - name: Build release notes
+        run: |
+          PROJ="${{ steps.meta.outputs.project }}"
+          VER="${{ steps.meta.outputs.version }}"
+          BID="${{ steps.meta.outputs.build_id }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
+          {
+            echo "## ${PROJ} ${TAG}"
+            echo ""
+            echo "| Field | Value |"
+            echo "| :--- | :--- |"
+            echo "| **Game Version** | \`${VER}\` |"
+            echo "| **Steam Build ID** | \`${BID}\` |"
+            echo ""
+            echo "### SHA-256 Checksums"
+            echo '```text'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+          } > dist/RELEASE_NOTES.md
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PROJ="${{ steps.meta.outputs.project }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
+          ASSETS=(
+            "dist/${PROJ}-${TAG}-win64.zip"
+            "dist/${PROJ}.dll"
+            "dist/${PROJ}_Injector.exe"
+            "dist/SHA256SUMS.txt"
+          )
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${ASSETS[@]}" --clobber
+            gh release edit "${TAG}" --notes-file dist/RELEASE_NOTES.md
+          else
+            FLAGS=(--title "${PROJ} ${TAG}" --notes-file dist/RELEASE_NOTES.md --generate-notes)
+            if [[ "${{ inputs.prerelease }}" == "true" ]]; then
+              FLAGS+=(--prerelease)
+            fi
+            if [[ "${{ inputs.draft }}" == "true" ]]; then
+              FLAGS+=(--draft)
+            fi
+            gh release create "${TAG}" "${ASSETS[@]}" "${FLAGS[@]}"
+          fi
+
+      - name: Write workflow summary
+        run: |
+          cat dist/RELEASE_NOTES.md >> "$GITHUB_STEP_SUMMARY"
