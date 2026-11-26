@@ -7,17 +7,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Determine if running from source tree (resources/scripts/) or release package (root)
-if [ -f "$SCRIPT_DIR/config.json" ]; then
-    CONFIG_FILE="$SCRIPT_DIR/config.json"
-    BIN_DIR="$SCRIPT_DIR"
-elif [ -f "$SCRIPT_DIR/../../config.json" ]; then
+if [ -f "$SCRIPT_DIR/../../config.json" ]; then
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
     CONFIG_FILE="$PROJECT_ROOT/config.json"
     BIN_DIR="$PROJECT_ROOT/build/bin"
 else
-    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-    CONFIG_FILE="$PROJECT_ROOT/config.json"
-    BIN_DIR="$PROJECT_ROOT/build/bin"
+    CONFIG_FILE="$SCRIPT_DIR/config.json"
+    BIN_DIR="$SCRIPT_DIR"
 fi
 
 STEAM_APP_ID="3456950"
