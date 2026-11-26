@@ -38,6 +38,11 @@ namespace Visual
       float minVy{0.0f};
       float maxVx{0.0f};
       float maxVy{0.0f};
+      float feetVx{0.0f};
+      float feetVy{0.0f};
+      float headVx{0.0f};
+      float headVy{0.0f};
+      float healthPct{-1.0f};  // [0..1] when available, < 0 if unavailable
       bool  isEnemy{true};
       char  name[64]{};
     };
@@ -78,4 +83,34 @@ namespace Visual
       ImDrawList* drawList, float screenWidth, float screenHeight, const std::vector<EspShared::PlayerSnapshot>& players
     );
   }  // namespace NameEsp
+
+  namespace HealthEsp
+  {
+    void RegisterSettings();
+    void Shutdown();
+    bool IsEnabled();
+    void Render(
+      ImDrawList* drawList, float screenWidth, float screenHeight, const std::vector<EspShared::PlayerSnapshot>& players
+    );
+  }  // namespace HealthEsp
+
+  namespace SnaplineEsp
+  {
+    void RegisterSettings();
+    void Shutdown();
+    bool IsEnabled();
+    void Render(
+      ImDrawList* drawList, float screenWidth, float screenHeight, const std::vector<EspShared::PlayerSnapshot>& players
+    );
+  }  // namespace SnaplineEsp
+
+  namespace HeadDotEsp
+  {
+    void RegisterSettings();
+    void Shutdown();
+    bool IsEnabled();
+    void Render(
+      ImDrawList* drawList, float screenWidth, float screenHeight, const std::vector<EspShared::PlayerSnapshot>& players
+    );
+  }  // namespace HeadDotEsp
 }  // namespace Visual

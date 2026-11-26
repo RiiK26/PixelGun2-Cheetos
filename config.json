@@ -4,10 +4,10 @@
 	"steam-build-id": "26948004",
 	"assembly_sha256": "bf35ffef1e7593a069707e3a34d34af79176580e103dbc8cfee3e6f394325544",
 	"signatures_summary": {
-		"total": 8,
-		"ok": 8,
+		"total": 9,
+		"ok": 9,
 		"broken": 0,
-		"used": 8,
+		"used": 9,
 		"dormant": 0
 	},
 	"signatures": {
@@ -44,6 +44,11 @@
 		"kPlayerStanding_GetName": {
 			"rva": "0x105A350",
 			"pattern": "48 83 EC 38 48 8B 41 30 48 83 C4 38 C3",
+			"status": "ok"
+		},
+		"kHealthState_GetPercentage": {
+			"rva": "0x1310F10",
+			"pattern": "40 53 48 83 EC 20 8B 59 04 33 D2 E8",
 			"status": "ok"
 		},
 		"kCamera_GetAllCameras": {

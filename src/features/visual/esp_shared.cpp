@@ -70,6 +70,8 @@ namespace Visual::EspShared
   using MatchPresentation_TryGetGameModePlayerData_t =
     bool (*)(void* self, NetworkId entityRef, void** outPlayerStanding);
   using PlayerStanding_GetName_t                                        = const void* (*)(void* self);
+  using HealthComponent_GetState_t                                      = void* (*)(void* self);
+  using HealthState_GetPercentage_t                                     = float (*)(void* healthState);
   using Camera_GetMain_t                                                = void* (*)();
   using Camera_GetAllCameras_t                                          = void* (*)();
   using Camera_GetOrthographic_t                                        = bool (*)(void* camera);
@@ -80,21 +82,24 @@ namespace Visual::EspShared
 
   static PlayerVisuals_Present_t                      g_origPresent     = nullptr;
   static PlayerVisualLatePresent_LatePresent_t        g_origLatePresent = nullptr;
-  static PlayerVisuals_GetIsFpsCharacter_t            g_fnGetIsFpsCharacter     = nullptr;
-  static PlayerVisuals_GetPlayerTeamRelation_t        g_fnGetPlayerTeamRelation = nullptr;
-  static EcsComponentBeh_GetId_t                      g_fnGetId                 = nullptr;
-  static MatchPresentation_TryGetGameModePlayerData_t g_fnTryGetPlayerData      = nullptr;
-  static PlayerStanding_GetName_t                     g_fnPlayerStandingGetName = nullptr;
-  static Camera_GetMain_t                             g_fnCameraGetMain         = nullptr;
-  static Camera_GetAllCameras_t                       g_fnCameraGetAll          = nullptr;
-  static Camera_GetOrthographic_t                     g_fnCameraGetOrthographic = nullptr;
-  static Camera_GetDepth_t                            g_fnCameraGetDepth        = nullptr;
-  static Camera_WorldToViewportPoint_t                g_fnWorldToViewportPoint  = nullptr;
-  static Component_GetTransform_t                     g_fnComponentGetTransform = nullptr;
-  static Transform_GetPosition_t                      g_fnTransformGetPosition  = nullptr;
+  static PlayerVisuals_GetIsFpsCharacter_t            g_fnGetIsFpsCharacter       = nullptr;
+  static PlayerVisuals_GetPlayerTeamRelation_t        g_fnGetPlayerTeamRelation   = nullptr;
+  static EcsComponentBeh_GetId_t                      g_fnGetId                   = nullptr;
+  static MatchPresentation_TryGetGameModePlayerData_t g_fnTryGetPlayerData        = nullptr;
+  static PlayerStanding_GetName_t                     g_fnPlayerStandingGetName   = nullptr;
+  static HealthComponent_GetState_t                   g_fnHealthComponentGetState = nullptr;
+  static HealthState_GetPercentage_t                  g_fnHealthStateGetPct       = nullptr;
+  static Camera_GetMain_t                             g_fnCameraGetMain           = nullptr;
+  static Camera_GetAllCameras_t                       g_fnCameraGetAll            = nullptr;
+  static Camera_GetOrthographic_t                     g_fnCameraGetOrthographic   = nullptr;
+  static Camera_GetDepth_t                            g_fnCameraGetDepth          = nullptr;
+  static Camera_WorldToViewportPoint_t                g_fnWorldToViewportPoint    = nullptr;
+  static Component_GetTransform_t                     g_fnComponentGetTransform   = nullptr;
+  static Transform_GetPosition_t                      g_fnTransformGetPosition    = nullptr;
 
-  static int32_t                                      g_offCharacterView        = offsets::kPlayerVisuals_CharacterView;
-  static int32_t                                      g_offMatch                = offsets::kPlayerVisuals_Match;
+  static int32_t                                      g_offCharacterView    = offsets::kPlayerVisuals_CharacterView;
+  static int32_t                                      g_offMatch            = offsets::kPlayerVisuals_Match;
+  static int32_t                                      g_offHealthComponent  = offsets::kPlayerVisuals_HealthComponent;
   static int32_t                                      g_offCurrentHitboxSet = offsets::kPlayerVisuals_CurrentHitboxSet;
   static int32_t                                      g_offRenderedAlive = offsets::kPlayerVisuals_RenderedAliveState;
   static int32_t                                      g_offHeadHitbox    = offsets::kHitboxSet_AimAssistHeadHitbox;
@@ -204,8 +209,9 @@ namespace Visual::EspShared
     TrackedPlayer& tracked,
     void*          camera,
     bool           bodyOn,
-    bool           boxOn,
+    bool           overlayOn,
     bool           nameOn,
+    bool           healthOn,
     ULONGLONG      nowMs
   )
   {
@@ -219,7 +225,7 @@ namespace Visual::EspShared
       isAlive = *reinterpret_cast<const bool*>(static_cast<const uint8_t*>(self) + g_offRenderedAlive);
     }
 
-    if ((!bodyOn && !boxOn && !nameOn) || !isAlive) {
+    if ((!bodyOn && !overlayOn) || !isAlive) {
       BodyEsp::OnPlayerUpdate(self, key, false, false);
       return;
     }
@@ -237,10 +243,7 @@ namespace Visual::EspShared
 
     BodyEsp::OnPlayerUpdate(self, key, bodyOn, isEnemy);
 
-    if (
-      (!boxOn && !nameOn) || !camera || !g_fnWorldToViewportPoint || !g_fnComponentGetTransform
-      || !g_fnTransformGetPosition
-    ) {
+    if (!overlayOn || !camera || !g_fnWorldToViewportPoint || !g_fnComponentGetTransform || !g_fnTransformGetPosition) {
       return;
     }
 
@@ -261,8 +264,9 @@ namespace Visual::EspShared
       return;
     }
 
-    Vector3 feetWorld = g_fnTransformGetPosition(feetTransform);
-    Vector3 headWorld = {feetWorld.x, feetWorld.y + 2.1f, feetWorld.z};
+    Vector3 feetWorld       = g_fnTransformGetPosition(feetTransform);
+    Vector3 headWorld       = {feetWorld.x, feetWorld.y + 2.1f, feetWorld.z};
+    Vector3 headCenterWorld = {feetWorld.x, feetWorld.y + 1.75f, feetWorld.z};
 
     if (g_offCurrentHitboxSet > 0 && g_offHeadHitbox > 0) {
       void* hitboxSet = *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(self) + g_offCurrentHitboxSet);
@@ -273,15 +277,17 @@ namespace Visual::EspShared
           if (IsValidUnityObject(headTransform)) {
             Vector3 h = g_fnTransformGetPosition(headTransform);
             if (h.y > feetWorld.y + 1.2f) {
-              headWorld = {h.x, h.y + 0.35f, h.z};
+              headCenterWorld = h;
+              headWorld       = {h.x, h.y + 0.35f, h.z};
             }
           }
         }
       }
     }
 
-    Vector3 feetVp = g_fnWorldToViewportPoint(camera, feetWorld);
-    Vector3 headVp = g_fnWorldToViewportPoint(camera, headWorld);
+    Vector3 feetVp       = g_fnWorldToViewportPoint(camera, feetWorld);
+    Vector3 headVp       = g_fnWorldToViewportPoint(camera, headWorld);
+    Vector3 headCenterVp = g_fnWorldToViewportPoint(camera, headCenterWorld);
 
     if (feetVp.z <= 0.01f || headVp.z <= 0.01f) {
       return;
@@ -297,7 +303,38 @@ namespace Visual::EspShared
     snap.maxVx   = (std::max) (feetVp.x, headVp.x);
     snap.minVy   = (std::min) (feetVp.y, headVp.y);
     snap.maxVy   = (std::max) (feetVp.y, headVp.y);
+    snap.feetVx  = feetVp.x;
+    snap.feetVy  = feetVp.y;
+    snap.headVx  = (headCenterVp.z > 0.01f) ? headCenterVp.x : headVp.x;
+    snap.headVy  = (headCenterVp.z > 0.01f) ? headCenterVp.y : headVp.y;
     snap.isEnemy = isEnemy;
+
+    if (healthOn && g_offHealthComponent > 0 && g_fnHealthComponentGetState) {
+      void* healthComp = *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(self) + g_offHealthComponent);
+      if (IsValidUnityObject(healthComp)) {
+        // Guard against Photon Fusion throwing InvalidOperationException when NetworkBehaviour::Ptr is null
+        void* netPtr =
+          *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(healthComp) + offsets::kNetworkBehaviour_Ptr);
+        void* statePtr = netPtr ? g_fnHealthComponentGetState(healthComp) : nullptr;
+        if (statePtr) {
+          float pct = -1.0f;
+          if (g_fnHealthStateGetPct) {
+            pct = g_fnHealthStateGetPct(statePtr);
+          }
+          else {
+            const auto*   sb    = static_cast<const uint8_t*>(statePtr);
+            const int32_t curHp = *reinterpret_cast<const int32_t*>(sb + offsets::kHealthState_Health);
+            const int32_t maxHp = *reinterpret_cast<const int32_t*>(sb + offsets::kHealthState_MaxHealth);
+            if (maxHp > 0) {
+              pct = static_cast<float>(curHp) / static_cast<float>(maxHp);
+            }
+          }
+          if (pct >= 0.0f && std::isfinite(pct)) {
+            snap.healthPct = std::clamp(pct, 0.0f, 1.0f);
+          }
+        }
+      }
+    }
 
     if (nameOn) {
       if (
@@ -353,12 +390,16 @@ namespace Visual::EspShared
       return;
     }
 
-    const bool      bodyOn = BodyEsp::IsEnabled();
-    const bool      boxOn  = BoxEsp::IsEnabled();
-    const bool      nameOn = NameEsp::IsEnabled();
+    const bool      bodyOn     = BodyEsp::IsEnabled();
+    const bool      boxOn      = BoxEsp::IsEnabled();
+    const bool      nameOn     = NameEsp::IsEnabled();
+    const bool      healthOn   = HealthEsp::IsEnabled();
+    const bool      snaplineOn = SnaplineEsp::IsEnabled();
+    const bool      headDotOn  = HeadDotEsp::IsEnabled();
+    const bool      overlayOn  = boxOn || nameOn || healthOn || snaplineOn || headDotOn;
 
-    const ULONGLONG nowMs  = GetTickCount64();
-    void*           camera = (boxOn || nameOn) ? FindGameplayCamera(nowMs) : nullptr;
+    const ULONGLONG nowMs      = GetTickCount64();
+    void*           camera     = overlayOn ? FindGameplayCamera(nowMs) : nullptr;
 
     g_stagingSnapshots.clear();
 
@@ -370,7 +411,7 @@ namespace Visual::EspShared
         continue;
       }
 
-      UpdatePlayerEsp(pv, it->first, it->second, camera, bodyOn, boxOn, nameOn, nowMs);
+      UpdatePlayerEsp(pv, it->first, it->second, camera, bodyOn, overlayOn, nameOn, healthOn, nowMs);
       ++it;
     }
 
@@ -418,7 +459,7 @@ namespace Visual::EspShared
       return res.address;
     };
 
-    g_fnGetIsFpsCharacter     = reinterpret_cast<PlayerVisuals_GetIsFpsCharacter_t>(resolveFn({
+    g_fnGetIsFpsCharacter       = reinterpret_cast<PlayerVisuals_GetIsFpsCharacter_t>(resolveFn({
       .name       = "PlayerVisuals::get_IsFpsCharacter",
       .aobPattern = signatures::kPlayerVisuals_GetIsFpsCharacter,
       .namespaze  = kPlayerNs,
@@ -428,7 +469,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kPlayerVisuals_GetIsFpsCharacter,
     }));
 
-    g_fnGetPlayerTeamRelation = reinterpret_cast<PlayerVisuals_GetPlayerTeamRelation_t>(resolveFn({
+    g_fnGetPlayerTeamRelation   = reinterpret_cast<PlayerVisuals_GetPlayerTeamRelation_t>(resolveFn({
       .name       = "PlayerVisuals::get_PlayerTeamRelation",
       .aobPattern = signatures::kPlayerVisuals_GetPlayerTeamRelation,
       .namespaze  = kPlayerNs,
@@ -438,7 +479,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kPlayerVisuals_GetPlayerTeamRelation,
     }));
 
-    g_fnGetId                 = reinterpret_cast<EcsComponentBeh_GetId_t>(resolveFn({
+    g_fnGetId                   = reinterpret_cast<EcsComponentBeh_GetId_t>(resolveFn({
       .name       = "EcsComponentBeh::get_Id",
       .namespaze  = "Psa.Core.Modules.Base.Ecs.Entities.Implementation",
       .className  = "EcsComponentBeh",
@@ -449,13 +490,13 @@ namespace Visual::EspShared
 
     // Note: MatchPresentation has two 2-arg overloads (PlayerId vs EntityRef); skip Tier 2 name-only lookup
     // so we never bind the PlayerId overload by accident.
-    g_fnTryGetPlayerData      = reinterpret_cast<MatchPresentation_TryGetGameModePlayerData_t>(resolveFn({
+    g_fnTryGetPlayerData        = reinterpret_cast<MatchPresentation_TryGetGameModePlayerData_t>(resolveFn({
       .name       = "MatchPresentation::TryGetGameModePlayerData(EntityRef)",
       .aobPattern = signatures::kMatchPresentation_TryGetGameModePlayerData,
       .staticRva  = RVA::kMatchPresentation_TryGetGameModePlayerData,
     }));
 
-    g_fnPlayerStandingGetName = reinterpret_cast<PlayerStanding_GetName_t>(resolveFn({
+    g_fnPlayerStandingGetName   = reinterpret_cast<PlayerStanding_GetName_t>(resolveFn({
       .name       = "PlayerStanding::get_Name",
       .aobPattern = signatures::kPlayerStanding_GetName,
       .namespaze  = kGameModeNs,
@@ -465,7 +506,22 @@ namespace Visual::EspShared
       .staticRva  = RVA::kPlayerStanding_GetName,
     }));
 
-    g_fnCameraGetMain         = reinterpret_cast<Camera_GetMain_t>(resolveFn({
+    g_fnHealthComponentGetState = reinterpret_cast<HealthComponent_GetState_t>(resolveFn({
+      .name       = "HealthComponent::get_State",
+      .namespaze  = "Psa.Core.Modules.Health.Components.Implementation",
+      .className  = "HealthComponent",
+      .methodName = "get_State",
+      .argCount   = 0,
+      .staticRva  = RVA::kHealthComponent_GetState,
+    }));
+
+    g_fnHealthStateGetPct       = reinterpret_cast<HealthState_GetPercentage_t>(resolveFn({
+      .name       = "HealthState::get_Percentage",
+      .aobPattern = signatures::kHealthState_GetPercentage,
+      .staticRva  = RVA::kHealthState_GetPercentage,
+    }));
+
+    g_fnCameraGetMain           = reinterpret_cast<Camera_GetMain_t>(resolveFn({
       .name       = "Camera::get_main",
       .namespaze  = kUnityNs,
       .className  = "Camera",
@@ -474,7 +530,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kCamera_GetMain,
     }));
 
-    g_fnCameraGetAll          = reinterpret_cast<Camera_GetAllCameras_t>(resolveFn({
+    g_fnCameraGetAll            = reinterpret_cast<Camera_GetAllCameras_t>(resolveFn({
       .name       = "Camera::get_allCameras",
       .aobPattern = signatures::kCamera_GetAllCameras,
       .namespaze  = kUnityNs,
@@ -484,7 +540,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kCamera_GetAllCameras,
     }));
 
-    g_fnCameraGetOrthographic = reinterpret_cast<Camera_GetOrthographic_t>(resolveFn({
+    g_fnCameraGetOrthographic   = reinterpret_cast<Camera_GetOrthographic_t>(resolveFn({
       .name       = "Camera::get_orthographic",
       .namespaze  = kUnityNs,
       .className  = "Camera",
@@ -493,7 +549,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kCamera_GetOrthographic,
     }));
 
-    g_fnCameraGetDepth        = reinterpret_cast<Camera_GetDepth_t>(resolveFn({
+    g_fnCameraGetDepth          = reinterpret_cast<Camera_GetDepth_t>(resolveFn({
       .name       = "Camera::get_depth",
       .namespaze  = kUnityNs,
       .className  = "Camera",
@@ -502,7 +558,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kCamera_GetDepth,
     }));
 
-    g_fnWorldToViewportPoint  = reinterpret_cast<Camera_WorldToViewportPoint_t>(resolveFn({
+    g_fnWorldToViewportPoint    = reinterpret_cast<Camera_WorldToViewportPoint_t>(resolveFn({
       .name       = "Camera::WorldToViewportPoint",
       .namespaze  = kUnityNs,
       .className  = "Camera",
@@ -511,7 +567,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kCamera_WorldToViewportPoint,
     }));
 
-    g_fnComponentGetTransform = reinterpret_cast<Component_GetTransform_t>(resolveFn({
+    g_fnComponentGetTransform   = reinterpret_cast<Component_GetTransform_t>(resolveFn({
       .name       = "Component::get_transform",
       .namespaze  = kUnityNs,
       .className  = "Component",
@@ -520,7 +576,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kComponent_GetTransform,
     }));
 
-    g_fnTransformGetPosition  = reinterpret_cast<Transform_GetPosition_t>(resolveFn({
+    g_fnTransformGetPosition    = reinterpret_cast<Transform_GetPosition_t>(resolveFn({
       .name       = "Transform::get_position",
       .namespaze  = kUnityNs,
       .className  = "Transform",
@@ -529,7 +585,7 @@ namespace Visual::EspShared
       .staticRva  = RVA::kTransform_GetPosition,
     }));
 
-    g_offCharacterView        = Resolver::ResolveFieldOffset({
+    g_offCharacterView          = Resolver::ResolveFieldOffset({
       .name         = "PlayerVisuals::_characterView",
       .namespaze    = kPlayerNs,
       .className    = "PlayerVisuals",
@@ -537,7 +593,7 @@ namespace Visual::EspShared
       .staticOffset = offsets::kPlayerVisuals_CharacterView,
     });
 
-    g_offMatch                = Resolver::ResolveFieldOffset({
+    g_offMatch                  = Resolver::ResolveFieldOffset({
       .name         = "PlayerVisuals::_match",
       .namespaze    = kPlayerNs,
       .className    = "PlayerVisuals",
@@ -545,7 +601,15 @@ namespace Visual::EspShared
       .staticOffset = offsets::kPlayerVisuals_Match,
     });
 
-    g_offCurrentHitboxSet     = Resolver::ResolveFieldOffset({
+    g_offHealthComponent        = Resolver::ResolveFieldOffset({
+      .name         = "PlayerVisuals::_healthComponent",
+      .namespaze    = kPlayerNs,
+      .className    = "PlayerVisuals",
+      .fieldName    = fields::kPlayerVisuals_HealthComponent,
+      .staticOffset = offsets::kPlayerVisuals_HealthComponent,
+    });
+
+    g_offCurrentHitboxSet       = Resolver::ResolveFieldOffset({
       .name         = "PlayerVisuals::_currentHitboxSet",
       .namespaze    = kPlayerNs,
       .className    = "PlayerVisuals",
@@ -553,7 +617,7 @@ namespace Visual::EspShared
       .staticOffset = offsets::kPlayerVisuals_CurrentHitboxSet,
     });
 
-    g_offRenderedAlive        = Resolver::ResolveFieldOffset({
+    g_offRenderedAlive          = Resolver::ResolveFieldOffset({
       .name         = "PlayerVisuals::_renderedAliveState",
       .namespaze    = kPlayerNs,
       .className    = "PlayerVisuals",
@@ -561,7 +625,7 @@ namespace Visual::EspShared
       .staticOffset = offsets::kPlayerVisuals_RenderedAliveState,
     });
 
-    int32_t offProfile        = Resolver::ResolveFieldOffset({
+    int32_t offProfile          = Resolver::ResolveFieldOffset({
       .name         = "PlayerStanding::<Profile>k__BackingField",
       .namespaze    = kGameModeNs,
       .className    = "PlayerStanding",
@@ -626,7 +690,9 @@ namespace Visual::EspShared
 
   void RenderOverlay(ImDrawList* drawList, float screenWidth, float screenHeight)
   {
-    if (!drawList || (!BoxEsp::IsEnabled() && !NameEsp::IsEnabled())) {
+    const bool anyOverlay = BoxEsp::IsEnabled() || NameEsp::IsEnabled() || HealthEsp::IsEnabled()
+                         || SnaplineEsp::IsEnabled() || HeadDotEsp::IsEnabled();
+    if (!drawList || !anyOverlay) {
       return;
     }
 
@@ -635,7 +701,10 @@ namespace Visual::EspShared
       return;
     }
 
+    SnaplineEsp::Render(drawList, screenWidth, screenHeight, g_renderSnapshots);
     BoxEsp::Render(drawList, screenWidth, screenHeight, g_renderSnapshots);
+    HealthEsp::Render(drawList, screenWidth, screenHeight, g_renderSnapshots);
+    HeadDotEsp::Render(drawList, screenWidth, screenHeight, g_renderSnapshots);
     NameEsp::Render(drawList, screenWidth, screenHeight, g_renderSnapshots);
   }
 }  // namespace Visual::EspShared
@@ -647,6 +716,9 @@ namespace Visual
     BodyEsp::RegisterSettings();
     BoxEsp::RegisterSettings();
     NameEsp::RegisterSettings();
+    HealthEsp::RegisterSettings();
+    SnaplineEsp::RegisterSettings();
+    HeadDotEsp::RegisterSettings();
     EspShared::RegisterSettings();
   }
 
@@ -662,6 +734,9 @@ namespace Visual
     BodyEsp::Shutdown();
     BoxEsp::Shutdown();
     NameEsp::Shutdown();
+    HealthEsp::Shutdown();
+    SnaplineEsp::Shutdown();
+    HeadDotEsp::Shutdown();
   }
 
   void RenderOverlay(ImDrawList* drawList, float screenWidth, float screenHeight)
