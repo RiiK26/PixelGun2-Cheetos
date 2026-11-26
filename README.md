@@ -4,7 +4,7 @@
 
 # PixelGun2-Cheetos
 
-**Internal x64 C++20 Overlay & Trainer for Pixel Gun 2**
+**Internal x64 C++20 Trainer for Pixel Gun 2**
 
 [![C++20](https://img.shields.io/badge/C%2B%2B20-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)](https://isocpp.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-D22128?style=for-the-badge&logo=apache&logoColor=white)](LICENSE)
@@ -17,7 +17,10 @@
 | :--- | :--- | :--- |
 | **Visual** | **ESP Body** | X-Ray player highlight through walls|
 | **Visual** | **ESP Box** | 2D bounding boxes projected|
-| **Visual** | **ESP Name** | Live player nametags|
+| **Visual** | **ESP Name** | Live player nametags |
+| **Visual** | **ESP Health** | Color-graded vertical health bar |
+| **Visual** | **ESP Snapline** | Tracer lines from bottom-center to players |
+| **Visual** | **ESP Head Dot** | Projected head hitbox dot |
 | **Visual** | **Team Check** | Filters teammates out of ESP rendering |
 
 ### Controls
