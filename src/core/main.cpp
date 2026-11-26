@@ -17,6 +17,7 @@
 #include "../features/visual/visual.hpp"
 #include "../ui/menu.h"
 #include "../utils/config.h"
+#include "../utils/il2cpp.h"
 #include "../utils/logger.h"
 #include "../utils/settings_registry.h"
 
@@ -91,6 +92,8 @@ static DWORD WINAPI MainThread(LPVOID lpParam)
     FreeLibraryAndExitThread(hModule, 1);
     return 1;
   }
+
+  IL2CPP::Init();
 
   if (Visual::Init()) {
     RendererHook::SetOverlayCallback(Visual::RenderOverlay);
