@@ -34,7 +34,7 @@
 
 ### Windows
 1. Place `PG2-Cheetos.dll` and `PG2-Cheetos_Injector.exe` in the same folder.
-2. Launch **Pixel Gun 2**, then run `PG2-Cheetos_Injector.exe`.
+2. Launch **Pixel Gun 2**, then run as administrator the `PG2-Cheetos_Injector.exe`.
 3. Press `INSERT` in-game to open the menu.
 
 ### Linux (Steam / Proton)
