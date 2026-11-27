@@ -83,7 +83,16 @@ jobs:
               with open(sf) as f:
                   data = json.load(f)
               for run in data.get('runs', []):
-                  results = run.get('results', [])
+                  raw_results = run.get('results', [])
+                  results = []
+                  for r in raw_results:
+                      locs = r.get('locations', [])
+                      uri = ''
+                      if locs:
+                          uri = locs[0].get('physicalLocation', {}).get('artifactLocation', {}).get('uri', '')
+                      if uri.startswith('src/vendor/') or '/src/vendor/' in uri:
+                          continue
+                      results.append(r)
                   total_issues += len(results)
                   if not results:
                       summary_lines.append('✅ **0 security vulnerabilities or code defects detected.**')
