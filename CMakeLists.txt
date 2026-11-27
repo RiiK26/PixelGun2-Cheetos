@@ -37,6 +37,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
+add_compile_definitions(NOMINMAX)
 add_compile_definitions("PROJECT_VERSION=\"${PARSED_VERSION}\"")
 add_compile_definitions("DLL_NAME=\"${PARSED_PROJECT_NAME}.dll\"")
 add_compile_definitions("INJECTOR_NAME=\"${PARSED_PROJECT_NAME}_Injector.exe\"")
