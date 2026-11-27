@@ -14,7 +14,7 @@
 - **Registries & Local Artifacts:**
   - `config.json`: Project name, numeric game `version` (no leading `v`), `steam-build-id`, `assembly_sha256`, and Tier 1 AOB signature registry (`CMakeLists.txt` tracks it via `CMAKE_CONFIGURE_DEPENDS`).
   - `resources/dumped/dump.cs` (git-ignored): IL2CPP metadata dump used for offset/RVA/enum verification and auto-healing.
-  - `todo.md` (git-ignored): Local task & feature roadmap (`New Feature`, `Fix Feature`, `Improve Feature`).
+  - `todo.md` (git-ignored): Local task & feature roadmap.
 
 ## Build & Workflow Commands
 Only `Release` and `Debug` build types are supported (choose one, you cannot build both in sametime):
