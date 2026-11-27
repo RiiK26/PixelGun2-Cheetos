@@ -149,3 +149,4 @@ jobs:
           if (-not (Test-Path $dll)) { throw "Missing $dll" }
           if (-not (Test-Path $inj)) { throw "Missing $inj" }
           Get-Item $dll, $inj | Select-Object Name, Length
+
