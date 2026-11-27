@@ -28,6 +28,7 @@ namespace SettingsRegistry
     Bool,
     Float,
     Int,
+    Choice,
     Action,
   };
 
@@ -35,16 +36,17 @@ namespace SettingsRegistry
 
   struct SettingEntry
   {
-    SettingType   type{SettingType::Bool};
-    std::string   iniKey{};
-    std::string   menuLabel{};
-    SettingTarget target{static_cast<bool*>(nullptr)};
-    float         fMin{0.0f};
-    float         fMax{0.0f};
-    float         fStep{0.0f};
-    int           iMin{0};
-    int           iMax{0};
-    int           iStep{0};
+    SettingType              type{SettingType::Bool};
+    std::string              iniKey{};
+    std::string              menuLabel{};
+    SettingTarget            target{static_cast<bool*>(nullptr)};
+    float                    fMin{0.0f};
+    float                    fMax{0.0f};
+    float                    fStep{0.0f};
+    int                      iMin{0};
+    int                      iMax{0};
+    int                      iStep{0};
+    std::vector<std::string> choiceLabels{};
   };
 
   struct SettingGroup
@@ -59,6 +61,8 @@ namespace SettingsRegistry
     AddFloat(const std::string& iniKey, const std::string& menuLabel, float* value, float min, float max, float step);
     SettingGroup&
     AddInt(const std::string& iniKey, const std::string& menuLabel, int* value, int min, int max, int step);
+    SettingGroup&
+    AddChoice(const std::string& iniKey, const std::string& menuLabel, int* value, std::vector<std::string> labels);
     SettingGroup& AddAction(const std::string& menuLabel, ActionFn action);
   };
 
