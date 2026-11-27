@@ -21,7 +21,7 @@ Only `Release` and `Debug` configurations are supported:
 
 ```powershell
 # Windows (MSVC)
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_INJECTOR=ON
+cmake -B build -A x64 -DBUILD_INJECTOR=ON
 cmake --build build --config Release --parallel
 ```
 
