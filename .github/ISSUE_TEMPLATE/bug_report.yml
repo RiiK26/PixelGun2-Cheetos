@@ -1,0 +1,56 @@
+name: Bug Report
+description: Report a crash, broken feature, or post-patch offset drift.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please provide as much detail as possible so we can reproduce and fix it.
+
+  - type: input
+    id: game_version
+    attributes:
+      label: Pixel Gun 2 Version / Steam Build ID
+      description: Found in config.json or Steam -> Properties -> Updates.
+      placeholder: "e.g. 0109.0.11593 / 26948004"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform & Graphics API
+      options:
+        - Windows (DX11)
+        - Windows (DX12)
+        - Linux / Steam Proton (DX11)
+        - Linux / Steam Proton (DX12)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear description of the bug or crash.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. Inject PG2-Cheetos.dll
+        2. Enable feature '...'
+        3. Enter match and observe '...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug Log (optional)
+      description: Paste relevant lines from PG2-Cheetos.log (from a Debug build).
+      render: text

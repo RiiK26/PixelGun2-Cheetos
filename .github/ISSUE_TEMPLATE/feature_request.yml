@@ -1,0 +1,37 @@
+name: Feature Request
+description: Suggest a new feature or improvement for PixelGun2-Cheetos.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Note: Pixel Gun 2 uses server-authoritative Photon Fusion matches and a backend Meta server, so currency/inventory/invincibility/speed features cannot be modified client-side in online matches.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Visual
+        - Weapon
+        - Player
+        - UI / Menu
+        - Tooling / Build
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Feature Description
+      description: Describe what you would like added and how it should behave.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context (optional)
+      description: Any relevant IL2CPP classes, screenshots, or design notes.
