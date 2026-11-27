@@ -70,6 +70,26 @@ namespace SettingsRegistry
     return *this;
   }
 
+  SettingGroup& SettingGroup::AddChoice(
+    const std::string& iniKey, const std::string& menuLabel, int* value, std::vector<std::string> labels
+  )
+  {
+    if (!value || labels.empty())
+      return *this;
+
+    SettingEntry entry{};
+    entry.type         = SettingType::Choice;
+    entry.iniKey       = iniKey;
+    entry.menuLabel    = menuLabel;
+    entry.target       = value;
+    entry.iMin         = 0;
+    entry.iMax         = static_cast<int>(labels.size()) - 1;
+    entry.iStep        = 1;
+    entry.choiceLabels = std::move(labels);
+    entries.push_back(std::move(entry));
+    return *this;
+  }
+
   SettingGroup& SettingGroup::AddAction(const std::string& menuLabel, ActionFn action)
   {
     if (!action)

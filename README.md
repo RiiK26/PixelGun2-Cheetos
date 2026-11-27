@@ -22,6 +22,12 @@
 | **Visual** | **ESP Snapline** | Tracer lines from bottom-center to players |
 | **Visual** | **ESP Head Dot** | Projected head hitbox dot |
 | **Visual** | **Team Check** | Filters teammates out of ESP rendering |
+| **Weapon** | **Aimbot** | Automatic smooth screen-space aimbot with sticky target tracking |
+| **Weapon** | **Aimbot Visibility Check** | Unity `Physics::Linecast` line-of-sight check to avoid locking through walls |
+| **Weapon** | **Aimbot FOV Circle** | Draws the active acquisition radius around the crosshair |
+| **Weapon** | **Aimbot FOV** | Adjustable acquisition radius (`20`–`400` px) |
+| **Weapon** | **Aimbot Smoothness** | Adjustable aim damping (`1.0`–`20.0`) |
+| **Weapon** | **Aimbot Target** | Selectable target bone (`Head` / `Neck` / `Body`) |
 
 ### Controls
 

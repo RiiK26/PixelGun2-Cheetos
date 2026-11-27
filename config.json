@@ -4,10 +4,10 @@
 	"steam-build-id": "26948004",
 	"assembly_sha256": "bf35ffef1e7593a069707e3a34d34af79176580e103dbc8cfee3e6f394325544",
 	"signatures_summary": {
-		"total": 9,
-		"ok": 9,
+		"total": 11,
+		"ok": 11,
 		"broken": 0,
-		"used": 9,
+		"used": 11,
 		"dormant": 0
 	},
 	"signatures": {
@@ -54,6 +54,16 @@
 		"kCamera_GetAllCameras": {
 			"rva": "0x92194B0",
 			"pattern": "40 53 48 83 EC 20 80 3D ? ? ? ? 00 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 48 8B 05 ? ? ? ? 48 85 C0",
+			"status": "ok"
+		},
+		"kPhysics_Linecast": {
+			"rva": "0x93B4C30",
+			"pattern": "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 70 80 3D ? ? ? ? 00 41 8B F1 0F 29 74 24 60 49",
+			"status": "ok"
+		},
+		"kRaycastHit_GetCollider": {
+			"rva": "0x93B8F60",
+			"pattern": "40 53 48 83 EC 20 80 3D ? ? ? ? 00 48 8B D9 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 48 8B 0D ? ? ? ? 8B 5B 28 83",
 			"status": "ok"
 		}
 	}

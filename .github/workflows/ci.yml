@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Repo Hygiene & Config Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run offline hygiene checks
+        run: |
+          python3 - << 'EOF'
+          import json, re, sys
+          from pathlib import Path
+
+          errors = []
+
+          # 1. Validate config.json schema & numeric-only version
+          cfg = json.loads(Path("config.json").read_text(encoding="utf-8"))
+          version = str(cfg.get("version", ""))
+          if not version or version.lower().startswith("v") or not re.fullmatch(r"[0-9]+(\.[0-9]+)*", version):
+              errors.append(f"config.json 'version' must be numeric-only (no leading 'v'), got: {version!r}")
+
+          # 2. Verify every signatures::k* constant in offsets.h is present in config.json
+          offsets_text = Path("src/utils/offsets.h").read_text(encoding="utf-8")
+          sig_block = offsets_text.split("namespace signatures", 1)[-1]
+          sig_names = set(re.findall(r"k[A-Za-z0-9_]+(?=\s*=)", sig_block))
+          cfg_sigs = set((cfg.get("signatures") or {}).keys())
+          missing_in_cfg = sorted(sig_names - cfg_sigs)
+          if missing_in_cfg:
+              errors.append(f"Signatures in src/utils/offsets.h missing from config.json: {missing_in_cfg}")
+
+          # 3. Check Apache 2.0 license header on all non-vendor C/C++ files
+          for path in sorted(Path("src").rglob("*")):
+              if not path.is_file() or "vendor" in path.parts:
+                  continue
+              if path.suffix not in {".c", ".cpp", ".h", ".hpp"}:
+                  continue
+              head = path.read_text(encoding="utf-8", errors="ignore")[:400]
+              if "Apache License, Version 2.0" not in head:
+                  errors.append(f"Missing Apache 2.0 license header: {path}")
+
+          # 4. Check no hardcoded local host paths leaked into tracked project files
+          forbidden = re.compile(r"(/home/[A-Za-z0-9_.-]+|/data/SteamLibrary|C:\\\\Users\\\\)", re.IGNORECASE)
+          scan_roots = [Path("src"), Path("resources/tools"), Path("resources/scripts"), Path(".agents"), Path("config.json")]
+          for root in scan_roots:
+              files = [root] if root.is_file() else (sorted(root.rglob("*")) if root.exists() else [])
+              for path in files:
+                  if not path.is_file() or "vendor" in path.parts or "__pycache__" in path.parts:
+                      continue
+                  if path.suffix in {".png", ".ico", ".exe", ".dll", ".obj", ".a", ".res", ".pyc"}:
+                      continue
+                  text = path.read_text(encoding="utf-8", errors="ignore")
+                  for lineno, line in enumerate(text.splitlines(), 1):
+                      if forbidden.search(line):
+                          errors.append(f"Hardcoded local host path in {path}:{lineno}: {line.strip()}")
+
+          if errors:
+              for e in errors:
+                  print(f"::error::{e}")
+              sys.exit(1)
+
+          print(f"[+] Hygiene checks passed ({len(sig_names)} Tier 1 signatures verified in sync).")
+          EOF
+
+  build-mingw:
+    name: Build MinGW (${{ matrix.build_type }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install MinGW Build Dependencies
+        run: |
+          sudo sed -i 's|security.ubuntu.com|azure.archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15"
+          for i in 1 2 3; do
+            sudo apt-get $APT_OPTS update -y && break || sleep 3
+          done
+          PKGS="g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 mingw-w64-x86-64-dev ninja-build"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get $APT_OPTS install -y --no-install-recommends $PKGS || {
+            sudo apt-get $APT_OPTS update -y
+            sudo DEBIAN_FRONTEND=noninteractive apt-get $APT_OPTS install -y --fix-missing $PKGS
+          }
+
+      - name: Configure & Build (${{ matrix.build_type }})
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=resources/cmake/mingw-toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DBUILD_INJECTOR=ON
+          cmake --build build -j"$(nproc)"
+
+      - name: Verify Artifacts
+        run: |
+          PROJ=$(python3 -c "import json; print(json.load(open('config.json'))['project'])")
+          test -f "build/bin/${PROJ}.dll"
+          test -f "build/bin/${PROJ}_Injector.exe"
+          ls -lh "build/bin/${PROJ}.dll" "build/bin/${PROJ}_Injector.exe"
+
+  build-msvc:
+    name: Build MSVC (${{ matrix.build_type }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure & Build (${{ matrix.build_type }})
+        shell: pwsh
+        run: |
+          cmake -B build -A x64 -DBUILD_INJECTOR=ON
+          cmake --build build --config ${{ matrix.build_type }} --parallel
+
+      - name: Verify Artifacts
+        shell: pwsh
+        run: |
+          $proj = (Get-Content config.json | ConvertFrom-Json).project
+          $dll = "build/bin/${{ matrix.build_type }}/$proj.dll"
+          $inj = "build/bin/${{ matrix.build_type }}/${proj}_Injector.exe"
+          if (-not (Test-Path $dll)) { throw "Missing $dll" }
+          if (-not (Test-Path $inj)) { throw "Missing $inj" }
+          Get-Item $dll, $inj | Select-Object Name, Length
+

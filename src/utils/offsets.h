@@ -79,6 +79,9 @@ namespace RVA
   inline constexpr uintptr_t kCamera_WorldToViewportPoint                = 0x9219170;
   inline constexpr uintptr_t kComponent_GetTransform                     = 0x92BC0F0;
   inline constexpr uintptr_t kTransform_GetPosition                      = 0x9311150;
+  inline constexpr uintptr_t kTransform_GetRoot                          = 0x930B5C0;
+  inline constexpr uintptr_t kPhysics_Linecast                           = 0x93B4C30;
+  inline constexpr uintptr_t kRaycastHit_GetCollider                     = 0x93B8F60;
 }  // namespace RVA
 
 namespace signatures
@@ -104,4 +107,9 @@ namespace signatures
   inline constexpr const char* kHealthState_GetPercentage = "40 53 48 83 EC 20 8B 59 04 33 D2 E8";
   inline constexpr const char* kCamera_GetAllCameras =
     "40 53 48 83 EC 20 80 3D ? ? ? ? 00 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 48 8B 05 ? ? ? ? 48 85 C0";
+  inline constexpr const char* kPhysics_Linecast =
+    "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 70 80 3D ? ? ? ? 00 41 8B F1 0F 29 74 24 60 49";
+  inline constexpr const char* kRaycastHit_GetCollider =
+    "40 53 48 83 EC 20 80 3D ? ? ? ? 00 48 8B D9 75 ? 48 8D 0D ? ? ? ? E8 ? ? ? ? 48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? "
+    "? ? ? 01 48 8B 0D ? ? ? ? 8B 5B 28 83";
 }  // namespace signatures

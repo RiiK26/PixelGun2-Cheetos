@@ -145,6 +145,19 @@ namespace Menu
             return;
           AdjustSlider(slider, dir);
         },
+        [&](const ChoicePayload& choice) {
+          if (!choice.value || choice.labels.empty())
+            return;
+          const int count = static_cast<int>(choice.labels.size());
+          int       idx   = *choice.value;
+          if (dir < 0) {
+            idx = (idx - 1 + count) % count;
+          }
+          else if (dir > 0) {  // right arrow or enter
+            idx = (idx + 1) % count;
+          }
+          *choice.value = idx;
+        },
         [&](const ActionPayload& act) {
           if (act.action && dir != 0) {
             act.action();
@@ -459,6 +472,18 @@ namespace Menu
               snprintf(buf, sizeof(buf), "< %d >", *slider.value);
             }
             drawList->AddText(ImVec2(startX + width - 80, currentY + 2), IM_COL32(255, 255, 100, 255), buf);
+          },
+          [&](const ChoicePayload& choice) {
+            if (!choice.value || choice.labels.empty())
+              return;
+            const int count = static_cast<int>(choice.labels.size());
+            const int idx   = std::clamp(*choice.value, 0, count - 1);
+            char      buf[48];
+            snprintf(buf, sizeof(buf), "< %s >", choice.labels[idx].c_str());
+            const float textWidth = ImGui::CalcTextSize(buf).x;
+            drawList->AddText(
+              ImVec2(startX + width - padding - textWidth, currentY + 2), IM_COL32(255, 255, 100, 255), buf
+            );
           },
           [&](const ActionPayload&) {
             drawList->AddText(ImVec2(startX + width - 80, currentY + 2), IM_COL32(200, 200, 200, 255), "[ENTER]");

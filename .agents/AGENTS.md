@@ -14,13 +14,14 @@
 - **Registries & Local Artifacts:**
   - `config.json`: Project name, numeric game `version` (no leading `v`), `steam-build-id`, `assembly_sha256`, and Tier 1 AOB signature registry (`CMakeLists.txt` tracks it via `CMAKE_CONFIGURE_DEPENDS`).
   - `resources/dumped/dump.cs` (git-ignored): IL2CPP metadata dump used for offset/RVA/enum verification and auto-healing.
+  - `todo.md` (git-ignored): Local task & feature roadmap.
 
 ## Build & Workflow Commands
-Only `Release` and `Debug` build types are supported:
+Only `Release` and `Debug` build types are supported (choose one, you cannot build both in sametime):
 
 - **Wrapper build script:**
   ```bash
-  ./resources/scripts/build release --injector   # Release DLL + Injector
+  ./resources/scripts/build release  # Release DLL without injector (passed)
   ./resources/scripts/build debug --injector     # Debug DLL (ENABLE_DEBUG_LOG) + Injector
   ```
 - **Direct CMake (Release default, logging stripped):**
@@ -48,22 +49,22 @@ Only `Release` and `Debug` build types are supported:
   ```
 
 ## Architecture & File Responsibilities
-Keep each layer focused and dependencies one-way (`features` -> `utils`/`ui`/`data`; `core` -> `ui`/`utils`; `utils` depends on nothing else):
+Keep each layer focused and dependencies one-way (`features` -> `utils`/`ui`; `core` -> `ui`/`utils`; `utils` depends on nothing else):
 
 - `src/core/` — Process lifecycle & graphics hooking
-  - `main.cpp`: `DllMain`, `MainThread` init/shutdown orchestration (`Config::SetConfigPath`, `SettingsRegistry` → `Menu` population, `Config::Load`/`Save`), `END` unload loop.
+  - `main.cpp`: `DllMain`, `MainThread` init/shutdown orchestration (`Config::SetConfigPath`, `SettingsRegistry` → `Menu` population, `Config::Load`/`Save`, `IL2CPP::Init()` before feature init), `END` unload loop.
   - `renderer.h` / `renderer.cpp`: DX11 & DX12 dummy-device vtable hooking (`Present`, `Present1`, `ResizeBuffers`, `ExecuteCommandLists`), per-frame backend auto-detection, ImGui frame rendering, and optional `OverlayCallback`.
 - `src/ui/` — Presentation & input
-  - `menu.h` / `menu.cpp`: ImGui context/font setup, `WndProc` hook (`INSERT` toggle, arrow/Enter navigation), `MenuItem` model (`Header`, `Toggle`, `Slider`, `Action`), and menu rendering.
+  - `menu.h` / `menu.cpp`: ImGui context/font setup, `WndProc` hook (`INSERT` toggle, arrow/Enter navigation), `MenuItem` model (`Header`, `Toggle`, `Slider`, `Choice`, `Action`), and menu rendering.
 - `src/utils/` — Pure reusable infrastructure
   - `logger.h` / `logger.cpp`: Thread-safe debug logger (`Logger::Init`, `Logger::Log`, `Logger::Shutdown`). Active only when `ENABLE_DEBUG_LOG` is defined (`Debug`); inline no-ops in `Release`.
-  - `settings_registry.h` / `settings_registry.cpp`: Centralized `SettingsRegistry` (`AddGroup`, `AddBool`, `AddFloat`, `AddInt`, `AddAction`, `Clear`, `GetGroups`) driving both `Menu` population and `Config` persistence.
+  - `settings_registry.h` / `settings_registry.cpp`: Centralized `SettingsRegistry` (`AddGroup`, `AddBool`, `AddFloat`, `AddInt`, `AddChoice`, `AddAction`, `Clear`, `GetGroups`) driving both `Menu` population and `Config` persistence.
   - `config.h` / `config.cpp`: Thread-safe INI persistence (`Config::SetConfigPath`, `Config::Save`, `Config::Load`) reading/writing `featureconfig.txt` next to the DLL.
   - `aob.h` / `aob.cpp`, `il2cpp.h` / `il2cpp.cpp`, `resolver.h` / `resolver.cpp`: 3-tier runtime resolution — Tier 1 AOB scan across all `IMAGE_SCN_MEM_EXECUTE` PE sections (`.text`, `il2cpp`), Tier 2 IL2CPP metadata lookup, Tier 3 static RVA/offset fallback.
   - `offsets.h`: Centralized registry for all IL2CPP `fields`, `offsets`, `RVA`, and `signatures` (never hardcode raw RVAs/offsets/signatures in feature `.cpp` files; always reference `offsets.h`).
-- `src/data/` — Game data definitions & 1:1 enums (`ability_card.hpp`, `character.hpp`, `chest.hpp`, `currency.hpp`, `loadout.hpp`, `skin.hpp`).
-- `src/features/` — Category-separated feature modules (`anticheat/`, `currency/`, `player/`, `visual/`, `weapon/`).
-  - **1:1 feature `.cpp` + 1 category `.hpp` orchestrator:** Each individual feature lives in its own `.cpp` file (e.g., `visual/body_esp.cpp`, `visual/box_esp.cpp`, `visual/name_esp.cpp`, with shared hooks/caches in `*_shared.cpp`), and each feature category folder has a single `.hpp` orchestrator header (e.g., `visual/visual.hpp`) that exposes the category lifecycle and coordinates its features.
+- `src/features/` — Category-separated feature modules (`currency/`, `player/`, `visual/`, `weapon/`).
+  - **1:1 feature `.cpp` + 1 category `.hpp` orchestrator:** Each individual feature lives in its own `.cpp` file (e.g., `visual/body_esp.cpp`, `visual/box_esp.cpp`, `visual/name_esp.cpp`, `visual/health_esp.cpp`, `visual/snapline_esp.cpp`, `visual/head_dot_esp.cpp` with shared hooks/caches/LOS raycasts in `visual/esp_shared.cpp`; `weapon/aimbot.cpp` with `weapon/weapon.hpp`), and each feature category folder has a single `.hpp` orchestrator header (`visual/visual.hpp`, `weapon/weapon.hpp`) that exposes the category lifecycle and coordinates its features.
+  - **Cross-category snapshot sharing:** Non-visual consumers (such as `Weapon::Aimbot`) register via `Visual::EspShared::SetSnapshotConsumer` (atomic callback) so `EspShared` keeps publishing `PlayerSnapshot` + `Physics::Linecast` LOS visibility without introducing a circular dependency.
   - **Single-responsibility toggles:** Never add redundant master toggles; each feature toggle controls its own behavior independently.
   - **Config load/save:** Auto-load `featureconfig.txt` on attach so saved settings override defaults; never auto-save on unload (`Save Config` is explicit only).
 - `src/injector/` — Standalone injector (`mainInjector.cpp`), excluded from the DLL target (built via `-DBUILD_INJECTOR=ON`).
@@ -83,5 +84,6 @@ Keep each layer focused and dependencies one-way (`features` -> `utils`/`ui`/`da
 - Never enable `ENABLE_DEBUG_LOG` in `Release`.
 - Never hardcode or commit local host paths (e.g. user home directories, local mount points, or custom Steam library paths) in code, scripts, configs, or docs — always use relative paths, Steam `libraryfolders.vdf` auto-discovery, or environment variables (`$PG2_GAME_DIR`).
 - Keep `config.json` `"version"` numeric-only (no leading `v`), synced from `Pixel Gun 2.exe` via `resources/tools/updater.py`.
+- **Tier 1 AOB by default:** Always generate and wire a unique Tier 1 AOB signature (`./resources/tools/updater.py gen-aob <SymbolOrRVA>`) into `src/utils/offsets.h` (`signatures::`) and `Resolver::ResolveMethod({ .aobPattern = ... })` for every method used by any new or updated feature. Only omit `.aobPattern` (falling back to Tier 2 IL2CPP metadata / Tier 3 static RVA) when `gen-aob` confirms a tiny or ICF-merged function has no unique byte pattern in `GameAssembly.dll`.
 - **Centralized offsets & auto-tracking:** Never hardcode raw RVAs, field offsets, or AOB strings in `src/features/`. For every new feature, define its constants in `src/utils/offsets.h` (`fields::`, `offsets::`, `RVA::`, `signatures::`), register them in `resources/tools/lib/registry.py` (`TRACKED_METHODS`, `TRACKED_FIELDS`, `TRACKED_ENUMS`), and run `updater.py autoheal` to sync `config.json`.
 - Always verify changes compile cleanly (`cmake --build build`) before reporting completion.

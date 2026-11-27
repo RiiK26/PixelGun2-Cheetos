@@ -24,6 +24,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -38,6 +39,18 @@ namespace Visual::EspShared
     float x;
     float y;
     float z;
+  };
+
+  struct RaycastHit
+  {
+    Vector3  point;     // 0x00
+    Vector3  normal;    // 0x0C
+    uint32_t faceId;    // 0x18
+    float    distance;  // 0x1C
+    float    uvX;       // 0x20
+    float    uvY;       // 0x24
+    int32_t  collider;  // 0x28
+    int32_t  pad;       // 0x2C
   };
 
   struct NetworkId
@@ -61,6 +74,7 @@ namespace Visual::EspShared
   };
 
   static bool g_teamCheck = true;  // Team Check for all visual are ON which mean teammate didnt included when its on
+  static std::atomic<SnapshotConsumerFn> g_snapshotConsumer{nullptr};
 
   using PlayerVisuals_Present_t               = void (*)(void* self);
   using PlayerVisualLatePresent_LatePresent_t = void (*)(void* self, const void* runnerState, void* bus);
@@ -69,19 +83,23 @@ namespace Visual::EspShared
   using EcsComponentBeh_GetId_t               = NetworkId (*)(void* self);
   using MatchPresentation_TryGetGameModePlayerData_t =
     bool (*)(void* self, NetworkId entityRef, void** outPlayerStanding);
-  using PlayerStanding_GetName_t                                        = const void* (*)(void* self);
-  using HealthComponent_GetState_t                                      = void* (*)(void* self);
-  using HealthState_GetPercentage_t                                     = float (*)(void* healthState);
-  using Camera_GetMain_t                                                = void* (*)();
-  using Camera_GetAllCameras_t                                          = void* (*)();
-  using Camera_GetOrthographic_t                                        = bool (*)(void* camera);
-  using Camera_GetDepth_t                                               = float (*)(void* camera);
-  using Camera_WorldToViewportPoint_t                                   = Vector3 (*)(void* camera, Vector3 position);
-  using Component_GetTransform_t                                        = void* (*)(void* component);
-  using Transform_GetPosition_t                                         = Vector3 (*)(void* transform);
+  using PlayerStanding_GetName_t      = const void* (*)(void* self);
+  using HealthComponent_GetState_t    = void* (*)(void* self);
+  using HealthState_GetPercentage_t   = float (*)(void* healthState);
+  using Camera_GetMain_t              = void* (*)();
+  using Camera_GetAllCameras_t        = void* (*)();
+  using Camera_GetOrthographic_t      = bool (*)(void* camera);
+  using Camera_GetDepth_t             = float (*)(void* camera);
+  using Camera_WorldToViewportPoint_t = Vector3 (*)(void* camera, Vector3 position);
+  using Component_GetTransform_t      = void* (*)(void* component);
+  using Transform_GetPosition_t       = Vector3 (*)(void* transform);
+  using Transform_GetRoot_t           = void* (*)(void* transform);
+  using Physics_Linecast_t =
+    bool (*)(Vector3 start, Vector3 end, RaycastHit* hitInfo, int32_t layerMask, int32_t queryTriggerInteraction);
+  using RaycastHit_GetCollider_t                                                  = void* (*)(RaycastHit* hit);
 
-  static PlayerVisuals_Present_t                      g_origPresent     = nullptr;
-  static PlayerVisualLatePresent_LatePresent_t        g_origLatePresent = nullptr;
+  static PlayerVisuals_Present_t                      g_origPresent               = nullptr;
+  static PlayerVisualLatePresent_LatePresent_t        g_origLatePresent           = nullptr;
   static PlayerVisuals_GetIsFpsCharacter_t            g_fnGetIsFpsCharacter       = nullptr;
   static PlayerVisuals_GetPlayerTeamRelation_t        g_fnGetPlayerTeamRelation   = nullptr;
   static EcsComponentBeh_GetId_t                      g_fnGetId                   = nullptr;
@@ -96,6 +114,9 @@ namespace Visual::EspShared
   static Camera_WorldToViewportPoint_t                g_fnWorldToViewportPoint    = nullptr;
   static Component_GetTransform_t                     g_fnComponentGetTransform   = nullptr;
   static Transform_GetPosition_t                      g_fnTransformGetPosition    = nullptr;
+  static Transform_GetRoot_t                          g_fnTransformGetRoot        = nullptr;
+  static Physics_Linecast_t                           g_fnPhysicsLinecast         = nullptr;
+  static RaycastHit_GetCollider_t                     g_fnRaycastHitGetCollider   = nullptr;
 
   static int32_t                                      g_offCharacterView    = offsets::kPlayerVisuals_CharacterView;
   static int32_t                                      g_offMatch            = offsets::kPlayerVisuals_Match;
@@ -111,7 +132,8 @@ namespace Visual::EspShared
   static std::vector<PlayerSnapshot>                  g_stagingSnapshots;
   static std::vector<PlayerSnapshot>                  g_publishedSnapshots;
   static std::vector<PlayerSnapshot>                  g_renderSnapshots;
-  static ULONGLONG                                    g_publishedMs = 0;
+  static ULONGLONG                                    g_publishedMs  = 0;
+  static uint64_t                                     g_publishedSeq = 0;
 
   static std::unordered_map<uintptr_t, TrackedPlayer> g_trackedVisuals;
   static void*                                        g_cachedGameplayCam = nullptr;
@@ -127,11 +149,60 @@ namespace Visual::EspShared
     return cachedPtr != nullptr;
   }
 
+  static bool HasLineOfSight(const Vector3& camPos, const Vector3& targetPos, void* targetRoot)
+  {
+    if (!g_fnPhysicsLinecast) {
+      return true;
+    }
+
+    const float dx   = targetPos.x - camPos.x;
+    const float dy   = targetPos.y - camPos.y;
+    const float dz   = targetPos.z - camPos.z;
+    const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (dist < 0.6f) {
+      return true;
+    }
+
+    // Start slightly ahead of the camera so the ray never clips our own local collider
+    constexpr float   kStartOffset        = 0.45f;
+    constexpr int32_t kDefaultRaycastMask = -5;  // Physics.DefaultRaycastLayers (~IgnoreRaycast)
+    constexpr int32_t kIgnoreTriggers     = 1;   // QueryTriggerInteraction.Ignore
+
+    const float       invDist             = 1.0f / dist;
+    const Vector3     start{
+      camPos.x + dx * invDist * kStartOffset,
+      camPos.y + dy * invDist * kStartOffset,
+      camPos.z + dz * invDist * kStartOffset,
+    };
+
+    RaycastHit hit{};
+    if (!g_fnPhysicsLinecast(start, targetPos, &hit, kDefaultRaycastMask, kIgnoreTriggers)) {
+      return true;
+    }
+
+    const float segLen = dist - kStartOffset;
+    if (hit.distance + 0.35f >= segLen) {
+      return true;
+    }
+
+    if (targetRoot && g_fnRaycastHitGetCollider && g_fnComponentGetTransform && g_fnTransformGetRoot) {
+      void* hitCol = g_fnRaycastHitGetCollider(&hit);
+      if (IsValidUnityObject(hitCol)) {
+        void* hitTf = g_fnComponentGetTransform(hitCol);
+        if (IsValidUnityObject(hitTf) && g_fnTransformGetRoot(hitTf) == targetRoot) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   bool         IsTeamCheckEnabled() { return g_teamCheck; }
 
   static void* FindGameplayCamera(ULONGLONG nowMs)
   {
-    if (IsValidUnityObject(g_cachedGameplayCam) && (nowMs - g_lastCamRefreshMs) < 1000) {
+    if (IsValidUnityObject(g_cachedGameplayCam) && (nowMs - g_lastCamRefreshMs) < 250) {
       return g_cachedGameplayCam;
     }
 
@@ -208,10 +279,13 @@ namespace Visual::EspShared
     uintptr_t      key,
     TrackedPlayer& tracked,
     void*          camera,
+    bool           hasCamPos,
+    const Vector3& camPos,
     bool           bodyOn,
     bool           overlayOn,
     bool           nameOn,
     bool           healthOn,
+    bool           checkLos,
     ULONGLONG      nowMs
   )
   {
@@ -299,6 +373,7 @@ namespace Visual::EspShared
     }
 
     PlayerSnapshot snap{};
+    snap.key     = key;
     snap.minVx   = (std::min) (feetVp.x, headVp.x);
     snap.maxVx   = (std::max) (feetVp.x, headVp.x);
     snap.minVy   = (std::min) (feetVp.y, headVp.y);
@@ -308,6 +383,24 @@ namespace Visual::EspShared
     snap.headVx  = (headCenterVp.z > 0.01f) ? headCenterVp.x : headVp.x;
     snap.headVy  = (headCenterVp.z > 0.01f) ? headCenterVp.y : headVp.y;
     snap.isEnemy = isEnemy;
+
+    if (checkLos && isEnemy && hasCamPos && g_fnPhysicsLinecast) {
+      const bool onScreen = snap.maxVx >= 0.0f && snap.minVx <= 1.0f && snap.maxVy >= 0.0f && snap.minVy <= 1.0f;
+      if (onScreen) {
+        void*         targetRoot = g_fnTransformGetRoot ? g_fnTransformGetRoot(feetTransform) : nullptr;
+        const Vector3 bodyWorld{
+          feetWorld.x,
+          feetWorld.y + (headCenterWorld.y - feetWorld.y) * 0.65f,
+          feetWorld.z,
+        };
+        snap.headVisible = HasLineOfSight(camPos, headCenterWorld, targetRoot);
+        snap.bodyVisible = HasLineOfSight(camPos, bodyWorld, targetRoot);
+      }
+      else {
+        snap.headVisible = false;
+        snap.bodyVisible = false;
+      }
+    }
 
     if (healthOn && g_offHealthComponent > 0 && g_fnHealthComponentGetState) {
       void* healthComp = *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(self) + g_offHealthComponent);
@@ -396,10 +489,21 @@ namespace Visual::EspShared
     const bool      healthOn   = HealthEsp::IsEnabled();
     const bool      snaplineOn = SnaplineEsp::IsEnabled();
     const bool      headDotOn  = HeadDotEsp::IsEnabled();
-    const bool      overlayOn  = boxOn || nameOn || healthOn || snaplineOn || headDotOn;
+    const auto      consumer   = g_snapshotConsumer.load(std::memory_order_acquire);
+    const bool      extOn      = consumer && consumer();
+    const bool      overlayOn  = boxOn || nameOn || healthOn || snaplineOn || headDotOn || extOn;
 
     const ULONGLONG nowMs      = GetTickCount64();
     void*           camera     = overlayOn ? FindGameplayCamera(nowMs) : nullptr;
+    Vector3         camPos{};
+    bool            hasCamPos = false;
+    if (extOn && camera && g_fnComponentGetTransform && g_fnTransformGetPosition) {
+      void* camTf = g_fnComponentGetTransform(camera);
+      if (IsValidUnityObject(camTf)) {
+        camPos    = g_fnTransformGetPosition(camTf);
+        hasCamPos = true;
+      }
+    }
 
     g_stagingSnapshots.clear();
 
@@ -411,7 +515,9 @@ namespace Visual::EspShared
         continue;
       }
 
-      UpdatePlayerEsp(pv, it->first, it->second, camera, bodyOn, overlayOn, nameOn, healthOn, nowMs);
+      UpdatePlayerEsp(
+        pv, it->first, it->second, camera, hasCamPos, camPos, bodyOn, overlayOn, nameOn, healthOn, extOn, nowMs
+      );
       ++it;
     }
 
@@ -419,6 +525,7 @@ namespace Visual::EspShared
     std::lock_guard<std::mutex> lock(g_snapshotMutex);
     g_publishedSnapshots.swap(g_stagingSnapshots);
     g_publishedMs = nowMs;
+    ++g_publishedSeq;
   }
 
   void RegisterSettings()
@@ -585,6 +692,32 @@ namespace Visual::EspShared
       .staticRva  = RVA::kTransform_GetPosition,
     }));
 
+    g_fnTransformGetRoot        = reinterpret_cast<Transform_GetRoot_t>(resolveFn({
+      .name       = "Transform::get_root",
+      .namespaze  = kUnityNs,
+      .className  = "Transform",
+      .methodName = "get_root",
+      .argCount   = 0,
+      .staticRva  = RVA::kTransform_GetRoot,
+    }));
+
+    // Physics::Linecast has multiple overloads; use Tier 1 AOB + Tier 3 RVA (skip Tier 2 name-only lookup).
+    g_fnPhysicsLinecast         = reinterpret_cast<Physics_Linecast_t>(resolveFn({
+      .name       = "Physics::Linecast(Vector3,Vector3,out RaycastHit,int,QueryTriggerInteraction)",
+      .aobPattern = signatures::kPhysics_Linecast,
+      .staticRva  = RVA::kPhysics_Linecast,
+    }));
+
+    g_fnRaycastHitGetCollider   = reinterpret_cast<RaycastHit_GetCollider_t>(resolveFn({
+      .name       = "RaycastHit::get_collider",
+      .aobPattern = signatures::kRaycastHit_GetCollider,
+      .namespaze  = kUnityNs,
+      .className  = "RaycastHit",
+      .methodName = "get_collider",
+      .argCount   = 0,
+      .staticRva  = RVA::kRaycastHit_GetCollider,
+    }));
+
     g_offCharacterView          = Resolver::ResolveFieldOffset({
       .name         = "PlayerVisuals::_characterView",
       .namespaze    = kPlayerNs,
@@ -667,8 +800,14 @@ namespace Visual::EspShared
     return true;
   }
 
+  void SetSnapshotConsumer(SnapshotConsumerFn consumer)
+  {
+    g_snapshotConsumer.store(consumer, std::memory_order_release);
+  }
+
   void Shutdown()
   {
+    g_snapshotConsumer.store(nullptr, std::memory_order_release);
     std::lock_guard<std::mutex> lock(g_snapshotMutex);
     g_stagingSnapshots.clear();
     g_publishedSnapshots.clear();
@@ -677,10 +816,13 @@ namespace Visual::EspShared
     g_cachedGameplayCam = nullptr;
   }
 
-  void GetFrameSnapshots(std::vector<PlayerSnapshot>& outSnapshots)
+  void GetFrameSnapshots(std::vector<PlayerSnapshot>& outSnapshots, uint64_t* outSeq)
   {
     const ULONGLONG             nowMs = GetTickCount64();
     std::lock_guard<std::mutex> lock(g_snapshotMutex);
+    if (outSeq) {
+      *outSeq = g_publishedSeq;
+    }
     if (g_publishedSnapshots.empty() || (nowMs - g_publishedMs) > 150) {
       outSnapshots.clear();
       return;

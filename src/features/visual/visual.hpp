@@ -33,25 +33,31 @@ namespace Visual
   {
     struct PlayerSnapshot
     {
+      uintptr_t key{0};
       // Normalized Unity viewport coordinates [0..1], origin bottom-left
-      float minVx{0.0f};
-      float minVy{0.0f};
-      float maxVx{0.0f};
-      float maxVy{0.0f};
-      float feetVx{0.0f};
-      float feetVy{0.0f};
-      float headVx{0.0f};
-      float headVy{0.0f};
-      float healthPct{-1.0f};  // [0..1] when available, < 0 if unavailable
-      bool  isEnemy{true};
-      char  name[64]{};
+      float     minVx{0.0f};
+      float     minVy{0.0f};
+      float     maxVx{0.0f};
+      float     maxVy{0.0f};
+      float     feetVx{0.0f};
+      float     feetVy{0.0f};
+      float     headVx{0.0f};
+      float     headVy{0.0f};
+      float     healthPct{-1.0f};  // [0..1] when available, < 0 if unavailable
+      bool      isEnemy{true};
+      bool      headVisible{true};
+      bool      bodyVisible{true};
+      char      name[64]{};
     };
+
+    using SnapshotConsumerFn = bool (*)();
 
     bool IsValidUnityObject(const void* obj);
     void RegisterSettings();
     bool Init();
     void Shutdown();
-    void GetFrameSnapshots(std::vector<PlayerSnapshot>& outSnapshots);
+    void SetSnapshotConsumer(SnapshotConsumerFn consumer);
+    void GetFrameSnapshots(std::vector<PlayerSnapshot>& outSnapshots, uint64_t* outSeq = nullptr);
   }  // namespace EspShared
 
   namespace BodyEsp

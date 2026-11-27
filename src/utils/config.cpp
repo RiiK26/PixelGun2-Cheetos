@@ -93,6 +93,7 @@ namespace Config
           }
           break;
         case SettingsRegistry::SettingType::Int :
+        case SettingsRegistry::SettingType::Choice :
           if (auto* const ptr = std::get_if<int*>(&entry.target); ptr && *ptr) {
             file << entry.iniKey << "=" << **ptr << "\n";
           }
@@ -204,6 +205,14 @@ namespace Config
         case SettingsRegistry::SettingType::Int :
           if (auto* const ptr = std::get_if<int*>(&entry.target); ptr && *ptr) {
             parseInt(fullKey, **ptr);
+          }
+          break;
+        case SettingsRegistry::SettingType::Choice :
+          if (auto* const ptr = std::get_if<int*>(&entry.target); ptr && *ptr) {
+            parseInt(fullKey, **ptr);
+            if (!entry.choiceLabels.empty()) {
+              **ptr = std::clamp(**ptr, 0, static_cast<int>(entry.choiceLabels.size()) - 1);
+            }
           }
           break;
         case SettingsRegistry::SettingType::Action :

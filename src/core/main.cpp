@@ -15,6 +15,7 @@
 
 #include "renderer.h"
 #include "../features/visual/visual.hpp"
+#include "../features/weapon/weapon.hpp"
 #include "../ui/menu.h"
 #include "../utils/config.h"
 #include "../utils/il2cpp.h"
@@ -49,6 +50,11 @@ static void PopulateMenuFromRegistry()
           Menu::AddMenuItem(Menu::MenuItem::Slider(entry.menuLabel, *ptr, entry.iMin, entry.iMax, entry.iStep));
         }
         break;
+      case SettingsRegistry::SettingType::Choice :
+        if (auto* const ptr = std::get_if<int*>(&entry.target); ptr && *ptr && !entry.choiceLabels.empty()) {
+          Menu::AddMenuItem(Menu::MenuItem::Choice(entry.menuLabel, *ptr, entry.choiceLabels));
+        }
+        break;
       case SettingsRegistry::SettingType::Action :
         if (auto* const fn = std::get_if<SettingsRegistry::ActionFn>(&entry.target); fn && *fn) {
           Menu::AddMenuItem(Menu::MenuItem::Action(entry.menuLabel, *fn));
@@ -57,6 +63,12 @@ static void PopulateMenuFromRegistry()
       }
     }
   }
+}
+
+static void RenderAllOverlays(ImDrawList* drawList, float screenWidth, float screenHeight)
+{
+  Visual::RenderOverlay(drawList, screenWidth, screenHeight);
+  Weapon::RenderOverlay(drawList, screenWidth, screenHeight);
 }
 
 static DWORD WINAPI MainThread(LPVOID lpParam)
@@ -78,6 +90,7 @@ static DWORD WINAPI MainThread(LPVOID lpParam)
 
   SettingsRegistry::Clear();
   Visual::RegisterSettings();
+  Weapon::RegisterSettings();
   auto& configGroup = SettingsRegistry::AddGroup("config", "-- CONFIG --", true);
   configGroup.AddAction("Save Config", Config::Save);
   configGroup.AddAction("Load Config", Config::Load);
@@ -95,8 +108,13 @@ static DWORD WINAPI MainThread(LPVOID lpParam)
 
   IL2CPP::Init();
 
-  if (Visual::Init()) {
-    RendererHook::SetOverlayCallback(Visual::RenderOverlay);
+  const bool visualOk = Visual::Init();
+  const bool weaponOk = Weapon::Init();
+  if (visualOk && weaponOk) {
+    Visual::EspShared::SetSnapshotConsumer(Weapon::Aimbot::IsEnabled);
+  }
+  if (visualOk || weaponOk) {
+    RendererHook::SetOverlayCallback(RenderAllOverlays);
   }
 
   MH_EnableHook(MH_ALL_HOOKS);
@@ -111,6 +129,8 @@ static DWORD WINAPI MainThread(LPVOID lpParam)
 
   Logger::Log("[MAIN] Unloading...");
   RendererHook::SetOverlayCallback(nullptr);
+  Visual::EspShared::SetSnapshotConsumer(nullptr);
+  Weapon::Shutdown();
   Visual::Shutdown();
   RendererHook::Shutdown();
   Menu::Shutdown();

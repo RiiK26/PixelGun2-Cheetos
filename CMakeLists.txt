@@ -22,11 +22,14 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build (Release or Debug)." FORCE)
+if(CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "Supported build configurations." FORCE)
+else()
+  if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build (Release or Debug)." FORCE)
+  endif()
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Release" "Debug")
 endif()
-
-set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Release" "Debug")
 
 option(BUILD_INJECTOR "Build standalone injector executable" OFF)
 
@@ -34,6 +37,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
+add_compile_definitions(NOMINMAX)
 add_compile_definitions("PROJECT_VERSION=\"${PARSED_VERSION}\"")
 add_compile_definitions("DLL_NAME=\"${PARSED_PROJECT_NAME}.dll\"")
 add_compile_definitions("INJECTOR_NAME=\"${PARSED_PROJECT_NAME}_Injector.exe\"")

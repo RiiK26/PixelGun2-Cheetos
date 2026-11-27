@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace Menu
 {
@@ -44,12 +45,18 @@ namespace Menu
   using FloatPayload = SliderPayload<float>;
   using IntPayload   = SliderPayload<int>;
 
+  struct ChoicePayload
+  {
+    int*                     value{nullptr};
+    std::vector<std::string> labels{};
+  };
+
   struct ActionPayload
   {
     void (*action)(){nullptr};
   };
 
-  using ItemPayload = std::variant<HeaderPayload, BoolPayload, FloatPayload, IntPayload, ActionPayload>;
+  using ItemPayload = std::variant<HeaderPayload, BoolPayload, FloatPayload, IntPayload, ChoicePayload, ActionPayload>;
 
   struct MenuItem
   {
@@ -71,6 +78,12 @@ namespace Menu
     {
       return MenuItem{
         std::move(name), IntPayload{val, min, max, step}
+      };
+    }
+    static MenuItem Choice(std::string name, int* val, std::vector<std::string> labels)
+    {
+      return MenuItem{
+        std::move(name), ChoicePayload{val, std::move(labels)}
       };
     }
     static MenuItem Action(std::string name, void (*act)()) { return MenuItem{std::move(name), ActionPayload{act}}; }

@@ -32,13 +32,9 @@ jobs:
 
           cfg = json.load(open("config.json", encoding="utf-8"))
           project = cfg.get("project", "PG2-Cheetos")
-          game_version = cfg.get("version", "unknown").lstrip("vV")
-          build_id = cfg.get("steam-build-id", "unknown")
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write(f"project={project}\n")
-              out.write(f"game_version={game_version}\n")
-              out.write(f"build_id={build_id}\n")
           EOF
 
       - name: Install MinGW Build Dependencies
@@ -154,8 +150,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PROJ="${{ steps.meta.outputs.project }}"
-          GAME_VER="${{ steps.meta.outputs.game_version }}"
-          BUILD_ID="${{ steps.meta.outputs.build_id }}"
           TAG="${{ steps.version.outputs.tag }}"
           REPO="${{ github.repository }}"
 
@@ -163,10 +157,8 @@ jobs:
           PREV_TAG=$(git tag -l "v*.*.*" | grep -v "^${TAG}$" | sort -V | tail -n 1 2>/dev/null || true)
           if [ -n "$PREV_TAG" ]; then
             RANGE="${PREV_TAG}..${TAG}"
-            SUBTITLE="Changes since \`${PREV_TAG}\`"
           else
             RANGE="${TAG}"
-            SUBTITLE="Release \`${TAG}\`"
           fi
 
           echo "Generating verbose release notes for ${RANGE}..."
@@ -189,7 +181,7 @@ jobs:
 
               echo "- **${SUBJECT}** ([\`${SHORT_HASH}\`](https://github.com/${REPO}/commit/${commit})) by @${AUTHOR}" >> release_notes.md
               if [ -n "$BODY" ]; then
-                echo "  > ${BODY}" >> release_notes.md
+                printf '%s\n' "$BODY" | sed 's/^/  > /' >> release_notes.md
               fi
             done
           else

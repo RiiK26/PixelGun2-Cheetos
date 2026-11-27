@@ -131,6 +131,15 @@ TRACKED_METHODS: Dict[str, Tuple[str, str, str, int, Optional[str]]] = {
     ),
     "kComponent_GetTransform": ("UnityEngine", "Component", "get_transform", 0, None),
     "kTransform_GetPosition": ("UnityEngine", "Transform", "get_position", 0, None),
+    "kTransform_GetRoot": ("UnityEngine", "Transform", "get_root", 0, None),
+    "kPhysics_Linecast": (
+        "UnityEngine",
+        "Physics",
+        "Linecast",
+        5,
+        "QueryTriggerInteraction",
+    ),
+    "kRaycastHit_GetCollider": ("UnityEngine", "RaycastHit", "get_collider", 0, None),
 }
 
 # offset_const_name -> (namespace, class_name, field_name)
